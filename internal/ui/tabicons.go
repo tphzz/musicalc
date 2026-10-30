@@ -43,6 +43,13 @@ var resourceSamplelengthSvg = &fyne.StaticResource{
 	StaticContent: resourceSamplelengthSvgData,
 }
 
+//go:embed taptempo.svg
+var resourceTaptempoSvgData []byte
+var resourceTaptempoSvg = &fyne.StaticResource{
+	StaticName:    "taptempo.svg",
+	StaticContent: resourceTaptempoSvgData,
+}
+
 //go:embed tempochange.svg
 var resourceTempochangeSvgData []byte
 var resourceTempochangeSvg = &fyne.StaticResource{

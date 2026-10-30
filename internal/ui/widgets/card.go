@@ -12,6 +12,9 @@ import (
 // SizeNameCardPadding is the theme size for the visible space between a card's edge and its text
 const SizeNameCardPadding fyne.ThemeSizeName = "cardPadding"
 
+// SizeNameDisplayText is the theme size for a large result value, like the tapped tempo
+const SizeNameDisplayText fyne.ThemeSizeName = "displayText"
+
 // Card is a rounded, slightly raised surface that groups one result.
 // Unlike widget.Card it uses the button color, so it stays visible on the dark background.
 type Card struct {

@@ -67,12 +67,13 @@ func main() {
 		{"Freq→Note", "Frequency to Note", ui.ResourceFreq2noteSvg, ui.NewFrequencyToNoteTab},
 		{"Sample Len", "Sample Length", ui.ResourceSamplelengthSvg, ui.NewSampleLengthTab},
 		{"Align Dly", "Alignment Delay", ui.ResourceAlignmentdelaySvg, ui.NewAlignmentDelayTab},
+		{"Tap", "Tap Tempo", ui.ResourceTaptempoSvg, nil}, // built below: it needs the tab bar
 	}
 	// Mobile shows icons only (larger, in fixed-width tabs)
 	isMobile := fyne.CurrentDevice().IsMobile()
 
 	categories := []CategoryInfo{
-		{Name: "Time & Tempo", TabIndices: []int{0, 1, 2}},
+		{Name: "Time & Tempo", TabIndices: []int{0, 1, 2, 7}},
 		{Name: "Frequency & Pitch", TabIndices: []int{3, 4}},
 		{Name: "Analysis", TabIndices: []int{5}},
 		{Name: "Multi-Mic", TabIndices: []int{6}},
@@ -85,6 +86,12 @@ func main() {
 	content := container.NewStack()
 	tabBar := widgets.NewTabBar()
 	built := make([]fyne.CanvasObject, len(tabs))
+	shown := 0 // global index of the tab on screen
+
+	// Tap Tempo's Delay button sends the tempo to Tempo to Delay (index 1 in Time & Tempo) and opens it
+	tabs[7].build = func() fyne.CanvasObject {
+		return ui.NewTapTempoTab(func() { tabBar.Select(1) })
+	}
 
 	// showTab shows a tab by its global index, building its content on first use.
 	// Built tabs are kept, so their inputs survive switching away and back.
@@ -92,6 +99,7 @@ func main() {
 		if built[index] == nil {
 			built[index] = tabs[index].build()
 		}
+		shown = index
 		content.Objects = []fyne.CanvasObject{built[index]}
 		content.Refresh()
 		headerLabel.SetText(categories[currentCategoryIndex].Name + " / " + tabs[index].heading)
@@ -127,6 +135,10 @@ func main() {
 	}
 
 	header := createCompactHeader(window, categories, switchCategory, headerLabel)
+	// Keys typed while no field has focus go to the shown tab (e.g. Space taps in Tap Tempo)
+	window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		ui.HandleTabKey(built[shown], ev)
+	})
 	window.SetContent(ui.NewShell(
 		container.NewVBox(header, widget.NewSeparator()),
 		content,

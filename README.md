@@ -1,8 +1,8 @@
 # MusiCalc
 
-A cross-platform music calculator application built with Go and Fyne. Provides real-time calculators for tempo, pitch, sampling, and time-stretching operations commonly used in music production and audio engineering.
+A cross-platform music calculator application built with Go and Fyne. Provides real-time calculators for tempo, pitch, sampling, and time-stretching operations commonly used in music production and audio engineering. It runs on Windows, Linux and Android.
 
-This project is heavily inspired by [MusicMath](https://dev.laurentcolson.com/musicmath.html), an excellent tool currently exclusive to the Apple ecosystem. This version aims to bring that same utility to Windows and Linux, with a simpler look and feel. For macOS users looking for a polished commercial solution, MusicMath is highly recommended. MusicMath has long been a reference tool for music-related calculations, and this project draws inspiration from that work.
+This project is heavily inspired by [MusicMath](https://dev.laurentcolson.com/musicmath.html), an excellent tool currently exclusive to the Apple ecosystem. This version aims to bring that same utility to Windows, Linux and Android, with a simpler look and feel. For macOS users looking for a polished commercial solution, MusicMath is highly recommended. MusicMath has long been a reference tool for music-related calculations, and this project draws inspiration from that work.
 
 <table style="width: 100%;" border="0">
   <tr>
@@ -31,20 +31,30 @@ This application is provided for informational purposes only and is not guarante
 - Add and subtract timecode operations
 - Frame count preservation when switching frame rates (H:M:S:F notation stays constant)
 - Compact display format showing timecode, frame count, and FPS
-- Unlimited calculation history with copy/paste support
+- Calculation history of the last 100 operations (selectable and copyable on desktop)
 - Essential for video editing, post-production, and audio-for-video work
 
 ### 🎵 Tempo to Delay Calculator
 - Calculate delay times (ms) and modulation frequencies (Hz) for various note divisions
-- Supports standard note values: whole notes to 1/64 notes
-- Includes dotted and triplet variations
+- One card per note value, from whole notes to 1/64 notes, with the straight, dotted and triplet values side by side
 - Real-time BPM input with instant recalculation
+- Built-in tap pad: tap along with the beat and the tempo field and all cards follow live (desktop: press T)
 - Perfect for setting up delay effects, LFOs, and rhythmic modulation
+
+### 👆 Tap Tempo
+- Find the tempo of a song by tapping along with the beat on a large tap area
+- Averages the last 8 taps; pausing for 2 seconds starts a new measurement
+- Shows the tempo, the number of taps, how steady the taps were (± BPM) and the quarter-note length
+- Round switches between two decimals and whole BPM
+- Delay sends the measured tempo straight to the Tempo to Delay calculator
+- Desktop: click, or press Space or T to tap; Esc resets
 
 ### 🎹 Note to Frequency Calculator
 - Complete MIDI note range: C-2 to B8 (MIDI 0-131)
 - Custom reference tuning support (default A3 = 440 Hz)
-- Displays frequencies for all chromatic notes
+- 46 bundled tunings (Scala scales), organized into Equal, Just, Historic and World submenus
+- Displays frequencies and cent deviations for all chromatic notes
+- Highlights the reference note and opens scrolled to it
 - Dual MIDI convention display (C4=60 standard / C3=60 alternative)
 - Real-time frequency calculation with adjustable reference pitch
 - Ideal for tuning synthesizers, creating custom scales, and frequency analysis
@@ -72,8 +82,9 @@ This application is provided for informational purposes only and is not guarante
 - Temperature input (C/F) to estimate speed of sound
 - Distance units (m/ft) for reference and target microphones
 - Per-mic results in milliseconds and samples (based on project sample rate)
-- Add/remove microphones in a table; all delays update automatically when any input changes
-- If a target mic is further than the reference, delay is shown as N/A
+- One card per microphone; all delays update automatically when any input changes
+- Mic names can be typed freely or picked from grouped presets (Drums, Overheads & Room, Instruments & Vocals)
+- If a target mic is further than the reference, the delay is shown as N/A
 
 ### 🎚️ Tempo Change Calculator
 - Calculate pitch changes from tempo adjustments
@@ -86,17 +97,11 @@ This application is provided for informational purposes only and is not guarante
 - Swap tempo values with one click
 - Perfect for time-stretching audio, pitch correction, and sampler tuning
 
-## TODOs
-
-- **Phase-Safe Distance & 3-to-1 Rule Helper:** This tool calculates physical "Sweet Spots" and "Death Zones" for microphone placement relative to the wavelength of a specific fundamental frequency, such as a kick drum's 60Hz thump. By mapping these phase relationships to physical distances, it helps engineers avoid destructive interference and includes a dedicated 3-to-1 rule calculator to ensure that bleed between multiple microphones remains phase-coherent and musically pleasing.
-- **Acoustic Room Mode Calculator:** This utility predicts the specific resonant frequencies (standing waves) of a rectangular recording or mixing space by analyzing its length, width, and height. It identifies axial, tangential, and oblique modes to help engineers anticipate "bass build-up" or "frequency nulls," making it an indispensable tool for placing acoustic treatment and finding the most accurate listening position within a room.
-- **Air Absorption & Humidity Compensator:** Designed for large-scale recording sessions and live sound reinforcement, this calculator determines how much high-frequency energy is naturally lost as sound travels through the air based on temperature and relative humidity. It provides the exact decibel boost required at specific frequencies (like 10kHz) to recover the "brilliance" lost over long distances, ensuring that distant microphones maintain the same clarity as close-up sources.
-- **Tap tempo:** Detect BPM from a series of taps (maybe, is built in practically everywhere)
-
 ## Documentation
 
 - **[User Guide](README-USERGUIDE.md)** - How to use each calculator
-- **[Build Instructions](build/docs/README-BUILD.md)** - How to build from source on Windows, Linux, and macOS
+- **[Ideas](IDEAS.md)** - Calculators that might be added in the future
+- **[Build Instructions](build/docs/README-BUILD.md)** - How to build from source on Windows, Linux and for Android
 - **[Creating Installers](build/docs/README-INSTALLER.md)** - Creating Windows installers and Linux packages
 - **[Icon Resources](build/docs/README-ICONS.md)** - Icon specifications and resources
 - **[Test Instructions](build/docs/README-TESTS.md)** - How to run tests
@@ -105,7 +110,8 @@ This application is provided for informational purposes only and is not guarante
 
 - Go 1.26.2 or later
 - GCC/MinGW (for CGO support on Windows)
-- Fyne v2.7.3
+- Fyne v2.8.2
+- For Android: Android SDK with NDK and the Fyne CLI (see the build instructions)
 
 ## License
 

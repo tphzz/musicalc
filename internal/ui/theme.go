@@ -36,6 +36,8 @@ func (m customTheme) Size(name fyne.ThemeSizeName) float32 {
 			return 12
 		}
 		return 10
+	case widgets.SizeNameDisplayText:
+		return 56
 	}
 
 	// Adjust sizes for mobile

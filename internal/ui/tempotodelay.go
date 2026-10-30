@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"musicalc/internal/logic"
 	"musicalc/internal/ui/widgets"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -13,15 +14,43 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// delayTempo is the tempo of the Tempo to Delay tab. It is shared so the Tap Tempo tab can send
+// its measurement there, even before Tempo to Delay has been opened. It is bound to a variable
+// with the default value, because setting a binding needs the running app.
+var (
+	delayTempoValue = "120"
+	delayTempo      = binding.BindString(&delayTempoValue)
+)
+
 func NewTempoTab() fyne.CanvasObject {
-	bpm := binding.NewString()
-	_ = bpm.Set("120")
+	bpm := delayTempo
 	input := widgets.NewNumericEntry()
-	input.SetText("120")
+	input.Bind(bpm)
+	input.Validator = nil // Bind adds a conversion validator, which would show a check mark
 	input.PlaceHolder = "Tempo"
-	input.OnChanged = func(s string) {
-		_ = bpm.Set(s)
+
+	// Tap pad: each tap writes the measured tempo into the field, so the cards follow live
+	isMobile := fyne.CurrentDevice().IsMobile()
+	idleStatus, padStyle, padTitle := "or press T · resets after 2 s", widgets.TapPadInline, "Tap"
+	if isMobile {
+		idleStatus, padStyle, padTitle = "Tap along with the beat · resets after 2 s", widgets.TapPadCompact, "TAP"
 	}
+	var tapper logic.TapTempo
+	var pad *widgets.TapPad
+	pad = widgets.NewTapPad(padStyle, padTitle, idleStatus, func() {
+		r := tapper.Tap(time.Now())
+		if r.Valid {
+			_ = bpm.Set(fmt.Sprintf("%.1f", r.BPM))
+			pad.SetStatus(fmt.Sprintf("%d taps · %.1f BPM", r.Taps, r.BPM))
+		} else {
+			pad.SetStatus("Tap again…")
+		}
+		pad.SetActive(true)
+		whenTapsStop(&tapper, func() {
+			pad.SetActive(false)
+			pad.SetStatus(idleStatus)
+		})
+	})
 
 	// One card per note value, with its straight, dotted and triplet lengths side by side
 	groups := []struct {
@@ -64,10 +93,9 @@ func NewTempoTab() fyne.CanvasObject {
 	rows := make([][]valueRow, len(groups))
 	cards := container.NewVBox()
 	for gi, g := range groups {
-		// The subtitle sits at the bottom so it shares the larger title's baseline
-		header := container.New(layout.NewCustomPaddedHBoxLayout(textGap),
+		header := widgets.NewBaselineRow(textGap,
 			widgets.NewStyledText(g.Name, theme.ColorNameForeground, theme.SizeNameSubHeadingText, fyne.TextStyle{Bold: true}),
-			container.NewVBox(layout.NewSpacer(), widgets.NewMutedText(g.Subtitle)),
+			widgets.NewMutedText(g.Subtitle),
 		)
 		content := container.New(layout.NewCustomPaddedVBoxLayout(rowGap), header)
 		for _, v := range variants {
@@ -98,13 +126,23 @@ func NewTempoTab() fyne.CanvasObject {
 		}
 	}))
 
-	return container.NewBorder(
+	content := container.NewBorder(
 		container.NewVBox(
 			input,
+			pad,
 			widget.NewSeparator(),
 		),
 		nil, nil, nil,
 		// A little inset keeps the card shadows from being clipped by the scroller
 		container.NewVScroll(container.New(layout.NewCustomPaddedLayout(2, 4, 2, 2), cards)),
 	)
+	// Desktop: T taps while the tempo field isn't focused
+	setTabKeyHandler(content, func(ev *fyne.KeyEvent) bool {
+		if ev.Name == fyne.KeyT {
+			pad.OnTap()
+			return true
+		}
+		return false
+	})
+	return content
 }

@@ -130,12 +130,10 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 
 		return widgets.NewCard(container.New(layout.NewCustomPaddedVBoxLayout(0),
 			container.NewBorder(nil, nil, nil, container.NewHBox(distance, removeBtn), name),
-			// Overlap the texts' inner padding so they sit a padding apart; the smaller text
-			// sits at the bottom to share the delay's baseline
-			container.New(layout.NewCustomPaddedHBoxLayout(theme.Padding()-2*theme.InnerPadding()),
+			// Overlap the texts' inner padding so they sit a padding apart, on a shared baseline
+			widgets.NewBaselineRow(theme.Padding()-2*theme.InnerPadding(),
 				widgets.NewStyledText(delayText, delayColor, theme.SizeNameSubHeadingText, fyne.TextStyle{Bold: true}),
-				container.NewVBox(layout.NewSpacer(),
-					widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{})),
+				widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{}),
 			),
 		))
 	}
