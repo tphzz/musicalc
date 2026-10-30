@@ -6,10 +6,12 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"musicalc/internal/logic"
+	"musicalc/internal/ui/widgets"
 )
 
 // NewAlignmentDelayTab creates the Multi-Mic Alignment Delay calculator
@@ -82,111 +84,61 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		return s
 	}
 
-	// Table cells stack a label and an icon; the actions column shows the icon only.
-	// Icons are used instead of emoji so the app works without the emoji font (no_emoji tag).
-	newCell := func() fyne.CanvasObject {
-		l := widget.NewLabel("")
-		l.Truncation = fyne.TextTruncateClip
-		icon := widget.NewIcon(nil)
-		icon.Hide()
-		return container.NewStack(l, container.NewCenter(icon))
-	}
-	cellParts := func(cell fyne.CanvasObject) (*widget.Label, *widget.Icon) {
-		objects := cell.(*fyne.Container).Objects
-		return objects[0].(*widget.Label), objects[1].(*fyne.Container).Objects[0].(*widget.Icon)
-	}
-	showIcon := func(label *widget.Label, icon *widget.Icon, res fyne.Resource) {
-		label.Hide()
-		icon.SetResource(res)
-		icon.Show()
-	}
-	showLabel := func(label *widget.Label, icon *widget.Icon) {
-		icon.Hide()
-		label.Show()
-	}
+	// Each microphone is shown as a card. The list is rebuilt on every change; it only holds a few mics.
+	micList := container.NewVBox()
+	emptyHint := widgets.NewMutedText("Add a mic with a name and its distance to the reference.")
+	emptyHint.Wrapping = fyne.TextWrapWord
 
-	// Table to display microphones with sticky header
-	table := widget.NewTableWithHeaders(
-		func() (int, int) {
-			return len(calc.Mics), 4
-		},
-		newCell,
-		func(id widget.TableCellID, cell fyne.CanvasObject) {
-			if id.Row >= len(calc.Mics) {
-				return
-			}
-			label, icon := cellParts(cell)
-			mic := calc.Mics[id.Row]
-			if id.Col == 3 {
-				showIcon(label, icon, theme.DeleteIcon())
-				return
-			}
-			showLabel(label, icon)
-			label.Alignment = fyne.TextAlignLeading
-			label.TextStyle = fyne.TextStyle{Bold: false}
-			switch id.Col {
-			case 0:
-				label.SetText(mic.Name)
-			case 1:
-				unit := targetUnitSelect.Selected
-				label.SetText(formatTrimFloat(logic.FromMeters(mic.DistanceMeters, unit), 3) + unit)
-			case 2:
-				if mic.IsBeyondReference {
-					label.SetText("N/A")
-					break
-				}
-				delayFormat := "ms / %d smp"
-				if isMobile {
-					delayFormat = "ms/%dsmp"
-				}
-				label.SetText(formatTrimFloat(mic.DelayMS, 2) + fmt.Sprintf(delayFormat, mic.DelaySamples))
-			}
-		},
-	)
+	var refreshMics func()
+	newMicCard := func(index int, mic logic.AlignmentMic) fyne.CanvasObject {
+		name := widget.NewLabelWithStyle(mic.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		name.Truncation = fyne.TextTruncateEllipsis
+		unit := targetUnitSelect.Selected
+		distance := widgets.NewMutedText(formatTrimFloat(logic.FromMeters(mic.DistanceMeters, unit), 3) + " " + unit)
+		removeBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+			calc.RemoveMicAt(index)
+			refreshMics()
+		})
+		removeBtn.Importance = widget.LowImportance
 
-	// Configure sticky header
-	table.CreateHeader = newCell
-	table.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		label, icon := cellParts(o)
-		if id.Col == -1 {
-			showLabel(label, icon)
-			label.SetText("")
-			return
+		delayText, samplesText := formatTrimFloat(mic.DelayMS, 2)+" ms", fmt.Sprintf("%d samples", mic.DelaySamples)
+		delayColor, samplesColor := theme.ColorNameForeground, theme.ColorNamePlaceHolder
+		if mic.IsBeyondReference {
+			delayText, samplesText = "N/A", "Farther than the reference"
+			delayColor, samplesColor = theme.ColorNameWarning, theme.ColorNameWarning
 		}
-		if id.Col == 3 {
-			showIcon(label, icon, theme.SettingsIcon())
-			return
-		}
-		showLabel(label, icon)
-		label.TextStyle = fyne.TextStyle{Bold: true}
-		label.Alignment = fyne.TextAlignLeading
-		headers := []string{"Name", "Distance", "Delay", "Actions"}
-		if isMobile {
-			headers[1] = "Dist."
-		}
-		label.SetText(headers[id.Col])
+
+		return widgets.NewCard(container.New(layout.NewCustomPaddedVBoxLayout(0),
+			container.NewBorder(nil, nil, nil, container.NewHBox(distance, removeBtn), name),
+			// Overlap the texts' inner padding so they sit a padding apart; the smaller text
+			// sits at the bottom to share the delay's baseline
+			container.New(layout.NewCustomPaddedHBoxLayout(theme.Padding()-2*theme.InnerPadding()),
+				widgets.NewStyledText(delayText, delayColor, theme.SizeNameSubHeadingText, fyne.TextStyle{Bold: true}),
+				container.NewVBox(layout.NewSpacer(),
+					widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{})),
+			),
+		))
 	}
 
-	// Hide the empty row header column, like the other tables
-	table.ShowHeaderColumn = false
-
-	table.SetColumnWidth(0, 120)
-	table.SetColumnWidth(1, 100)
-	table.SetColumnWidth(2, 180)
-	table.SetColumnWidth(3, 60)
-
-	// Refresh table data
-	refreshTable := func() {
+	refreshMics = func() {
 		calc.SetTemperature(logic.ParseFloat(tempEntry.Text), tempUnitSelect.Selected)
 		calc.SetSampleRateLabel(sampleRateSelect.Selected)
 		calc.SetReferenceDistance(logic.ParseFloat(refDistEntry.Text), refUnitSelect.Selected)
 		calc.Recalculate()
-		table.Refresh()
+
+		cards := make([]fyne.CanvasObject, 0, len(calc.Mics))
+		for i, mic := range calc.Mics {
+			cards = append(cards, newMicCard(i, mic))
+		}
+		if len(cards) == 0 {
+			cards = append(cards, emptyHint)
+		}
+		micList.Objects = cards
+		micList.Refresh()
 	}
 
 	// Add microphone button with emphasis
 	addButton := widget.NewButton("+", func() {
-		// Button handler
 		name := strings.TrimSpace(micNameSelect.Text)
 		if name == "" {
 			name = fmt.Sprintf("Mic %d", len(calc.Mics)+1)
@@ -200,33 +152,17 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 
 		micNameSelect.SetText("")
 		targetDistEntry.SetText("")
-		refreshTable()
+		refreshMics()
 	})
 
-	// Handle table clicks for remove
-	table.OnSelected = func(id widget.TableCellID) {
-		if id.Row >= 0 && id.Col == 3 && id.Row < len(calc.Mics) {
-			// Remove microphone
-			calc.RemoveMicAt(id.Row)
-			refreshTable()
-		}
-		table.UnselectAll()
-	}
-
-	// Recalculate when temperature or reference changes
-	tempEntry.OnChanged = func(string) { refreshTable() }
-	tempUnitSelect.OnChanged = func(string) { refreshTable() }
-	refDistEntry.OnChanged = func(string) { refreshTable() }
-	refUnitSelect.OnChanged = func(string) { refreshTable() }
-	sampleRateSelect.OnChanged = func(string) { refreshTable() }
-	targetUnitSelect.OnChanged = func(string) { refreshTable() }
-
-	// Create responsive table wrapper for proper column sizing
-	columnProportions := []float32{0.30, 0.20, 0.40, 0.10} // Name, Distance, Delay, Remove
-	if isMobile {
-		columnProportions = []float32{0.26, 0.20, 0.44, 0.10}
-	}
-	responsiveTableWidget := NewResponsiveTable(table, columnProportions, 100, 20)
+	// Recalculate when temperature, reference, sample rate or display unit change
+	tempEntry.OnChanged = func(string) { refreshMics() }
+	tempUnitSelect.OnChanged = func(string) { refreshMics() }
+	refDistEntry.OnChanged = func(string) { refreshMics() }
+	refUnitSelect.OnChanged = func(string) { refreshMics() }
+	sampleRateSelect.OnChanged = func(string) { refreshMics() }
+	targetUnitSelect.OnChanged = func(string) { refreshMics() }
+	refreshMics()
 
 	// Compact layout with minimal widths
 	tempEntry.Resize(fyne.NewSize(80, tempEntry.MinSize().Height))
@@ -291,16 +227,16 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		),
 	)
 
-	// Use Border layout to make table stretch vertically
+	// The inputs stay on top; the mic cards fill and scroll in the remaining space.
+	// A little inset keeps the card shadows from being clipped by the scroller.
 	content := container.NewBorder(
 		container.NewVBox(
 			topRow,
 			widget.NewSeparator(),
 			micRow,
-			// widget.NewSeparator(),
 		),
 		nil, nil, nil,
-		responsiveTableWidget,
+		container.NewVScroll(container.New(layout.NewCustomPaddedLayout(2, 4, 2, 2), micList)),
 	)
 
 	return content

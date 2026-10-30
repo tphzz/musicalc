@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"musicalc/internal/logic"
 	sclres "musicalc/internal/logic/scl"
 	"musicalc/internal/ui/widgets"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/theme"
@@ -183,14 +185,27 @@ func NewDiapasonTab() fyne.CanvasObject {
 	table = widget.NewTableWithHeaders(
 		func() (int, int) { return 132, 4 },
 		func() fyne.CanvasObject {
-			return widget.NewLabel("")
+			// The rectangle highlights the reference note's row
+			return container.NewStack(canvas.NewRectangle(color.Transparent), widget.NewLabel(""))
 		},
 		func(id widget.TableCellID, o fyne.CanvasObject) {
-			l := o.(*widget.Label)
+			cell := o.(*fyne.Container)
+			highlight := cell.Objects[0].(*canvas.Rectangle)
+			l := cell.Objects[1].(*widget.Label)
 			l.Alignment = fyne.TextAlignLeading
 
 			// MIDI note starts at 0 (C-2)
 			midiNote := id.Row
+
+			// Highlight the reference row; a bold C marks the start of each octave
+			isReference := midiNote == cachedRefMidi
+			if isReference {
+				highlight.FillColor = theme.Color(theme.ColorNameSelection)
+			} else {
+				highlight.FillColor = color.Transparent
+			}
+			highlight.Refresh()
+			l.TextStyle = fyne.TextStyle{Bold: isReference || (id.Col == 0 && midiNote%12 == 0)}
 
 			// Use cached values for performance (updated only when bindings change)
 			// Calculate frequency using selected tuning
@@ -264,6 +279,21 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// minWidth stays below phone widths (~340) so the proportions also apply on Android
 	responsiveTableWidget := NewResponsiveTable(table, []float32{0.18, 0.32, 0.22, 0.28}, 300, 20)
 
+	// scrollToReference shows the reference note near the top with two rows of context above it.
+	// Scrolling up to a row puts it at the top (behind the sticky header, hence 3 rows), so jump
+	// to the bottom first.
+	scrollToReference := func() {
+		row := cachedRefMidi - 3
+		if row < 0 {
+			row = 0
+		} else if row > 131 {
+			row = 131
+		}
+		table.ScrollToBottom()
+		table.ScrollTo(widget.TableCellID{Row: row, Col: 0})
+	}
+	responsiveTableWidget.OnFirstLayout = scrollToReference
+
 	// Add listener for Middle C radio buttons
 	middleCRadio.OnChanged = func(s string) {
 		// Only adjust reference if Middle C selection actually changed
@@ -306,6 +336,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 
 		updateCache()
 		table.Refresh()
+		scrollToReference()
 	}
 
 	// Add listeners to refresh table when inputs change
@@ -316,6 +347,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	refNote.AddListener(binding.NewDataListener(func() {
 		updateCache()
 		table.Refresh()
+		scrollToReference()
 	}))
 	tuning.AddListener(binding.NewDataListener(func() {
 		updateCache()

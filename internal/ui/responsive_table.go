@@ -12,6 +12,10 @@ type ResponsiveTable struct {
 	columnProportions []float32 // Proportions for each column (should sum to 1.0)
 	minWidth          float32   // Minimum total width before applying proportions
 	padding           float32   // Reserved space for padding and separators
+
+	// OnFirstLayout is called once, when the table first gets a size (e.g. to scroll to a row)
+	OnFirstLayout func()
+	laidOut       bool
 }
 
 // NewResponsiveTable creates a responsive table with proportional column widths
@@ -51,6 +55,14 @@ type responsiveTableRenderer struct {
 func (rr *responsiveTableRenderer) Layout(size fyne.Size) {
 	rr.table.Resize(size)
 	rr.responsive.updateColumnWidths(size.Width)
+
+	r := rr.responsive
+	if !r.laidOut && size.Width > 0 && size.Height > 0 {
+		r.laidOut = true
+		if r.OnFirstLayout != nil {
+			r.OnFirstLayout()
+		}
+	}
 }
 
 func (rr *responsiveTableRenderer) MinSize() fyne.Size {

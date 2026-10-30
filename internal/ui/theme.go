@@ -2,6 +2,7 @@ package ui
 
 import (
 	"image/color"
+	"musicalc/internal/ui/widgets"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -24,13 +25,17 @@ func (m customTheme) Font(style fyne.TextStyle) fyne.Resource {
 }
 
 func (m customTheme) Size(name fyne.ThemeSizeName) float32 {
-	if name == theme.SizeNameInlineIcon {
+	// SizeNameInlineIcon keeps the Fyne default (20) everywhere: buttons are at least
+	// this tall, so a larger value makes them taller than entries in the same row
+
+	switch name {
+	case theme.SizeNameCardRadius:
+		return 8
+	case widgets.SizeNameCardPadding:
 		if m.isMobile {
-			// Keep the Fyne default so radio and button icons stay large enough to tap;
-			// mobile tab icons are drawn at 1.5x this size
-			return theme.DefaultTheme().Size(name)
+			return 12
 		}
-		return 32
+		return 10
 	}
 
 	// Adjust sizes for mobile
