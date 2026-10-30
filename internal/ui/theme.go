@@ -26,7 +26,9 @@ func (m customTheme) Font(style fyne.TextStyle) fyne.Resource {
 func (m customTheme) Size(name fyne.ThemeSizeName) float32 {
 	if name == theme.SizeNameInlineIcon {
 		if m.isMobile {
-			return 16 // Smaller tab icons on mobile
+			// Keep the Fyne default so radio and button icons stay large enough to tap;
+			// mobile tab icons are drawn at 1.5x this size
+			return theme.DefaultTheme().Size(name)
 		}
 		return 32
 	}

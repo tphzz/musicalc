@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"musicalc/internal/logic"
@@ -13,10 +14,16 @@ import (
 
 // NewAlignmentDelayTab creates the Multi-Mic Alignment Delay calculator
 func NewAlignmentDelayTab() fyne.CanvasObject {
+	// Phones get shorter texts and a two-row header so inputs and columns aren't truncated
+	isMobile := fyne.CurrentDevice().IsMobile()
+
 	// Temperature input
 	tempEntry := widget.NewEntry()
 	//tempEntry.SetText("22")
 	tempEntry.SetPlaceHolder("Room Temp.")
+	if isMobile {
+		tempEntry.SetPlaceHolder("Temp.")
+	}
 
 	tempUnitSelect := widget.NewSelect([]string{"C", "F"}, nil)
 	tempUnitSelect.SetSelected("C")
@@ -55,6 +62,9 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	// Target distance input
 	targetDistEntry := widget.NewEntry()
 	targetDistEntry.SetPlaceHolder("Distance to Ref.")
+	if isMobile {
+		targetDistEntry.SetPlaceHolder("Distance")
+	}
 
 	targetUnitSelect := widget.NewSelect([]string{"m", "ft"}, nil)
 	targetUnitSelect.SetSelected("m")
@@ -72,67 +82,93 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		return s
 	}
 
+	// Table cells stack a label and an icon; the actions column shows the icon only.
+	// Icons are used instead of emoji so the app works without the emoji font (no_emoji tag).
+	newCell := func() fyne.CanvasObject {
+		l := widget.NewLabel("")
+		l.Truncation = fyne.TextTruncateClip
+		icon := widget.NewIcon(nil)
+		icon.Hide()
+		return container.NewStack(l, container.NewCenter(icon))
+	}
+	cellParts := func(cell fyne.CanvasObject) (*widget.Label, *widget.Icon) {
+		objects := cell.(*fyne.Container).Objects
+		return objects[0].(*widget.Label), objects[1].(*fyne.Container).Objects[0].(*widget.Icon)
+	}
+	showIcon := func(label *widget.Label, icon *widget.Icon, res fyne.Resource) {
+		label.Hide()
+		icon.SetResource(res)
+		icon.Show()
+	}
+	showLabel := func(label *widget.Label, icon *widget.Icon) {
+		icon.Hide()
+		label.Show()
+	}
+
 	// Table to display microphones with sticky header
 	table := widget.NewTableWithHeaders(
 		func() (int, int) {
 			return len(calc.Mics), 4
 		},
-		func() fyne.CanvasObject {
-			l := widget.NewLabel("")
-			l.Truncation = fyne.TextTruncateClip
-			return l
-		},
+		newCell,
 		func(id widget.TableCellID, cell fyne.CanvasObject) {
 			if id.Row >= len(calc.Mics) {
 				return
 			}
-			label := cell.(*widget.Label)
+			label, icon := cellParts(cell)
 			mic := calc.Mics[id.Row]
+			if id.Col == 3 {
+				showIcon(label, icon, theme.DeleteIcon())
+				return
+			}
+			showLabel(label, icon)
+			label.Alignment = fyne.TextAlignLeading
+			label.TextStyle = fyne.TextStyle{Bold: false}
 			switch id.Col {
 			case 0:
-				label.Alignment = fyne.TextAlignLeading
 				label.SetText(mic.Name)
 			case 1:
-				label.Alignment = fyne.TextAlignLeading
 				unit := targetUnitSelect.Selected
 				label.SetText(formatTrimFloat(logic.FromMeters(mic.DistanceMeters, unit), 3) + unit)
 			case 2:
-				label.Alignment = fyne.TextAlignLeading
 				if mic.IsBeyondReference {
 					label.SetText("N/A")
 					break
 				}
-				label.SetText(formatTrimFloat(mic.DelayMS, 2) + fmt.Sprintf("ms / %d smp", mic.DelaySamples))
-			case 3:
-				label.Alignment = fyne.TextAlignCenter
-				label.SetText("🗑️")
+				delayFormat := "ms / %d smp"
+				if isMobile {
+					delayFormat = "ms/%dsmp"
+				}
+				label.SetText(formatTrimFloat(mic.DelayMS, 2) + fmt.Sprintf(delayFormat, mic.DelaySamples))
 			}
-			label.TextStyle = fyne.TextStyle{Bold: false}
 		},
 	)
 
 	// Configure sticky header
-	table.CreateHeader = func() fyne.CanvasObject {
-		l := widget.NewLabel("")
-		l.Truncation = fyne.TextTruncateClip
-		return l
-	}
+	table.CreateHeader = newCell
 	table.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		label := o.(*widget.Label)
+		label, icon := cellParts(o)
 		if id.Col == -1 {
+			showLabel(label, icon)
 			label.SetText("")
 			return
 		}
-		label.TextStyle = fyne.TextStyle{Bold: true}
 		if id.Col == 3 {
-			label.Alignment = fyne.TextAlignCenter
-			label.SetText("🛠️")
+			showIcon(label, icon, theme.SettingsIcon())
 			return
 		}
+		showLabel(label, icon)
+		label.TextStyle = fyne.TextStyle{Bold: true}
 		label.Alignment = fyne.TextAlignLeading
 		headers := []string{"Name", "Distance", "Delay", "Actions"}
+		if isMobile {
+			headers[1] = "Dist."
+		}
 		label.SetText(headers[id.Col])
 	}
+
+	// Hide the empty row header column, like the other tables
+	table.ShowHeaderColumn = false
 
 	table.SetColumnWidth(0, 120)
 	table.SetColumnWidth(1, 100)
@@ -186,12 +222,11 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	targetUnitSelect.OnChanged = func(string) { refreshTable() }
 
 	// Create responsive table wrapper for proper column sizing
-	responsiveTableWidget := NewResponsiveTable(
-		table,
-		[]float32{0.30, 0.20, 0.40, 0.10}, // Column proportions: Name, Distance, Delay, Remove
-		100,                               // min width
-		60,                                // padding
-	)
+	columnProportions := []float32{0.30, 0.20, 0.40, 0.10} // Name, Distance, Delay, Remove
+	if isMobile {
+		columnProportions = []float32{0.26, 0.20, 0.44, 0.10}
+	}
+	responsiveTableWidget := NewResponsiveTable(table, columnProportions, 100, 20)
 
 	// Compact layout with minimal widths
 	tempEntry.Resize(fyne.NewSize(80, tempEntry.MinSize().Height))
@@ -221,11 +256,21 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		refGroup,
 	)
 
-	topRow := container.NewBorder(
+	var topRow fyne.CanvasObject = container.NewBorder(
 		nil, nil,
 		fixedWrap(sampleRateSelect, 100), nil,
 		tempRefRow,
 	)
+	if isMobile {
+		// Sample rate gets its own row, laid out like the Sample Length tab
+		topRow = container.NewVBox(
+			tempRefRow,
+			container.NewGridWithColumns(2,
+				widget.NewLabel("Sample Rate"),
+				sampleRateSelect,
+			),
+		)
+	}
 
 	// Emphasize the add button and make it wider
 	addButton.Importance = widget.HighImportance

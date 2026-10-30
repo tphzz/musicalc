@@ -157,8 +157,40 @@
    ./build/dist/musicalc_xxx
    ```
 
+## Android
+
+The Android build runs on Windows with PowerShell and produces an ARM64 APK.
+
+### Prerequisites
+
+1. **Android SDK and NDK**
+
+   Install Android Studio, then open the SDK Manager → "SDK Tools" and install:
+   - **Android SDK Build-Tools** (provides `zipalign`)
+   - **NDK (Side by side)**
+
+   The build script uses `%LOCALAPPDATA%\Android\Sdk` and the newest NDK inside it by default. Set `ANDROID_HOME` and/or `ANDROID_NDK_HOME` to override.
+
+2. **Fyne CLI**
+   ```powershell
+   go install fyne.io/tools/cmd/fyne@latest
+   ```
+
+### Build
+
+```powershell
+.\build\scripts\build-android.ps1
+```
+
+The script builds a release APK with the `no_emoji`, `no_animations` and `migrated_fynedo` tags for a smaller, snappier app, aligns it to 16 KB boundaries (required for Android 15+), and writes it to `build\dist\musicalc.apk`. App metadata (name, ID, icon) comes from `FyneApp.toml`; the version comes from the latest Git tag and the build number from the commit count.
+
+Install it on a connected device with:
+```powershell
+adb install -r build\dist\musicalc.apk
+```
+
 ## Requirements
 
 - Go 1.26.2 or later
 - GCC/MinGW (for CGO support on Windows)
-- Fyne v2.7.3
+- Fyne v2.8.2

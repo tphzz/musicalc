@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -25,7 +26,11 @@ func createCompactHeader(window fyne.Window, categories []CategoryInfo, switchCa
 		showCategoryMenu(window, categories, switchCategory)
 	})
 	menuButton.Importance = widget.LowImportance
-	return container.NewHBox(menuButton, container.NewCenter(headerLabel))
+	// Truncate long "category / tab" headings instead of overflowing narrow phone screens
+	headerLabel.Truncation = fyne.TextTruncateEllipsis
+	// Spacers center the label vertically next to the (taller) menu button while it keeps the full width
+	return container.NewBorder(nil, nil, menuButton, nil,
+		container.NewVBox(layout.NewSpacer(), headerLabel, layout.NewSpacer()))
 }
 
 func main() {
@@ -70,27 +75,15 @@ func main() {
 		alignmentText = "Align Dly"
 	}
 
-	// Create all tab items
-	timecodeTab := container.NewTabItem(timecodeText, ui.NewTimecodeTab())
-	timecodeTab.Icon = ui.ResourceTimecodeSvg
-
-	tempoTab := container.NewTabItem(tempoText, ui.NewTempoTab())
-	tempoTab.Icon = ui.ResourceDelaySvg
-
-	tempoChangeTab := container.NewTabItem(tempoChangeText, ui.NewTempoChangeTab())
-	tempoChangeTab.Icon = ui.ResourceTempochangeSvg
-
-	note2freqTab := container.NewTabItem(note2freqText, ui.NewDiapasonTab())
-	note2freqTab.Icon = ui.ResourceNote2freqSvg
-
-	freq2noteTab := container.NewTabItem(freq2noteText, ui.NewFrequencyToNoteTab())
-	freq2noteTab.Icon = ui.ResourceFreq2noteSvg
-
-	sampleLengthTab := container.NewTabItem(sampleLengthText, ui.NewSampleLengthTab())
-	sampleLengthTab.Icon = ui.ResourceSamplelengthSvg
-
-	alignmentTab := container.NewTabItem(alignmentText, ui.NewAlignmentDelayTab())
-	alignmentTab.Icon = ui.ResourceAlignmentdelaySvg
+	// Create all tab items with empty placeholders; content is built on first display
+	// so startup only pays for the tab that is actually shown
+	timecodeTab := container.NewTabItemWithIcon(timecodeText, ui.ResourceTimecodeSvg, container.NewStack())
+	tempoTab := container.NewTabItemWithIcon(tempoText, ui.ResourceDelaySvg, container.NewStack())
+	tempoChangeTab := container.NewTabItemWithIcon(tempoChangeText, ui.ResourceTempochangeSvg, container.NewStack())
+	note2freqTab := container.NewTabItemWithIcon(note2freqText, ui.ResourceNote2freqSvg, container.NewStack())
+	freq2noteTab := container.NewTabItemWithIcon(freq2noteText, ui.ResourceFreq2noteSvg, container.NewStack())
+	sampleLengthTab := container.NewTabItemWithIcon(sampleLengthText, ui.ResourceSamplelengthSvg, container.NewStack())
+	alignmentTab := container.NewTabItemWithIcon(alignmentText, ui.ResourceAlignmentdelaySvg, container.NewStack())
 
 	// Create single AppTabs with ALL tabs (maintains left alignment)
 	allTabs := []*container.TabItem{
@@ -99,6 +92,32 @@ func main() {
 		sampleLengthTab,
 		alignmentTab,
 	}
+
+	// Content builders for each global tab index
+	tabBuilders := []func() fyne.CanvasObject{
+		ui.NewTimecodeTab, ui.NewTempoTab, ui.NewTempoChangeTab,
+		ui.NewDiapasonTab, ui.NewFrequencyToNoteTab,
+		ui.NewSampleLengthTab,
+		ui.NewAlignmentDelayTab,
+	}
+	tabBuilt := make([]bool, len(allTabs))
+
+	// ensureBuilt creates a tab's content the first time it is shown; returns true if it was built now
+	ensureBuilt := func(item *container.TabItem) bool {
+		for i, tab := range allTabs {
+			if tab == item {
+				if tabBuilt[i] {
+					return false
+				}
+				tabBuilt[i] = true
+				tab.Content = tabBuilders[i]()
+				return true
+			}
+		}
+		return false
+	}
+	ensureBuilt(timecodeTab)
+
 	tabs := container.NewAppTabs(allTabs...)
 	tabs.SetTabLocation(container.TabLocationBottom)
 
@@ -144,6 +163,7 @@ func main() {
 
 		// Select first tab in category
 		if len(visibleTabs) > 0 {
+			ensureBuilt(visibleTabs[0])
 			tabs.Select(visibleTabs[0])
 		}
 
@@ -180,6 +200,9 @@ func main() {
 
 	// Update header when tab changes
 	tabs.OnSelected = func(item *container.TabItem) {
+		if ensureBuilt(item) {
+			tabs.Refresh()
+		}
 		updateHeader()
 	}
 

@@ -6,10 +6,12 @@ import (
 	sclres "musicalc/internal/logic/scl"
 	"musicalc/internal/ui/widgets"
 	"sort"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -49,6 +51,22 @@ func NewDiapasonTab() fyne.CanvasObject {
 		tuningOptions = append([]string{sclres.DefaultScaleName}, append(tuningOptions[:defaultIdx], tuningOptions[defaultIdx+1:]...)...)
 	}
 
+	// Some scale names are over 100 characters, which would make the dropdown wider than
+	// the screen, so the options show shortened names that map back to the full scale name
+	maxTuningNameLen := 52
+	if fyne.CurrentDevice().IsMobile() {
+		maxTuningNameLen = 34
+	}
+	tuningByDisplay := make(map[string]string, len(tuningOptions))
+	for i, name := range tuningOptions {
+		display := shortenName(name, maxTuningNameLen)
+		for n := 2; tuningByDisplay[display] != ""; n++ {
+			display = fmt.Sprintf("%s (%d)", shortenName(name, maxTuningNameLen-4), n)
+		}
+		tuningByDisplay[display] = name
+		tuningOptions[i] = display
+	}
+
 	// Reset function
 	resetToDefaults := func() {
 		_ = refNote.Set("A3")
@@ -82,7 +100,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 
 	// Tuning selector (dropdown only, no text entry)
 	tuningSelect := widget.NewSelect(tuningOptions, func(selected string) {
-		_ = tuning.Set(selected)
+		_ = tuning.Set(tuningByDisplay[selected])
 	})
 	tuningSelect.SetSelected(sclres.DefaultScaleName)
 
@@ -149,7 +167,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	updateCache()
 
 	// Reset button
-	resetBtn := widget.NewButton("🔄 Reset", func() {
+	resetBtn := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 		refNoteEntry.SetText("A3")
 		freqInput.SetText("440")
@@ -242,8 +260,9 @@ func NewDiapasonTab() fyne.CanvasObject {
 	table.ShowHeaderColumn = false
 
 	// Wrap table in responsive container with proportional column widths
-	// Proportions: Note (23%), Frequency (28%), Cents (23%), MIDI (26%)
-	responsiveTableWidget := NewResponsiveTable(table, []float32{0.23, 0.28, 0.23, 0.26}, 400, 20)
+	// Proportions: Note (18%), Frequency (32%), Cents (22%), MIDI (28%)
+	// minWidth stays below phone widths (~340) so the proportions also apply on Android
+	responsiveTableWidget := NewResponsiveTable(table, []float32{0.18, 0.32, 0.22, 0.28}, 300, 20)
 
 	// Add listener for Middle C radio buttons
 	middleCRadio.OnChanged = func(s string) {
@@ -327,4 +346,13 @@ func NewDiapasonTab() fyne.CanvasObject {
 		nil, nil, nil,
 		responsiveTableWidget,
 	)
+}
+
+// shortenName truncates name to at most maxLen characters, ending it with an ellipsis
+func shortenName(name string, maxLen int) string {
+	runes := []rune(name)
+	if len(runes) <= maxLen {
+		return name
+	}
+	return strings.TrimRight(string(runes[:maxLen-1]), " ,.;:-") + "…"
 }

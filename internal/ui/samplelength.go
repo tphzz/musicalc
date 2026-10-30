@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -172,7 +173,7 @@ func NewSampleLengthTab() fyne.CanvasObject {
 	calcFromTempo()
 
 	// Reset button
-	resetBtn := widget.NewButton("🔄 Reset", func() {
+	resetBtn := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 		sampleRateSelect.SetText("44100")
 		beatsInput.SetText("4")

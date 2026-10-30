@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -108,10 +109,15 @@ func NewTimecodeTab() fyne.CanvasObject {
 			resultTC, maxWidth, resultFrames, fpsLabel)
 	}
 
+	// Cap history so re-laying out the wrapped multi-line entry stays cheap
+	const maxHistoryEntries = 100
+
 	pushHistory := func(entry string) {
 		historyList = append([]string{entry}, historyList...)
+		if len(historyList) > maxHistoryEntries {
+			historyList = historyList[:maxHistoryEntries]
+		}
 		historyText.SetText(strings.Join(historyList, "\n\n"))
-		historyText.Refresh()
 		historyScroll.ScrollToTop()
 	}
 
@@ -252,7 +258,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 	timecode2Entry.OnOperationKey = handleOperationKey
 
 	// Reset operation
-	resetButton := widget.NewButton("🔄 Reset", func() {
+	resetButton := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		updating = true
 		timecode1Entry.SetText("")
 		timecode2Entry.SetText("")

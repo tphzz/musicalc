@@ -103,8 +103,8 @@ func NewTempoTab() fyne.CanvasObject {
 	bpm.AddListener(binding.NewDataListener(func() { table.Refresh() }))
 
 	// Wrap table in responsive container with proportional column widths
-	// Proportions: Length (20%), Delay (40%), Modulation (40%)
-	responsiveTableWidget := NewResponsiveTable(table, []float32{0.20, 0.40, 0.40}, 300, 20)
+	// Proportions: Length (24%), Delay (38%), Modulation (38%) - wide enough for the bold "Length" header on phones
+	responsiveTableWidget := NewResponsiveTable(table, []float32{0.24, 0.38, 0.38}, 300, 20)
 
 	return container.NewBorder(
 		container.NewVBox(

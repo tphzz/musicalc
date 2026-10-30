@@ -9,6 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -133,7 +134,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Play button - generates sine wave tone
-	playButton := widget.NewButton("▶ Play", func() {
+	playButton := widget.NewButtonWithIcon("Play", theme.MediaPlayIcon(), func() {
 		freq := logic.ParseFloat(frequencyEntry.Text)
 		if freq > 0 && freq < 20000 {
 			go audio.PlayFrequency(freq, 3*time.Second)
@@ -141,7 +142,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Reset button
-	resetButton := widget.NewButton("🔄 Reset", func() {
+	resetButton := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		frequencyEntry.SetText("440")
 		middleCRadio.SetSelected("C3")
 	})
