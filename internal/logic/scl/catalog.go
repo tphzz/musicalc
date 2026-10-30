@@ -1,73 +1,85 @@
 package logic
 
 // The bundled scales are named after the description line of their .scl file, which is often a
-// long citation. The catalog gives each one a short label, grouped and ordered for the tuning
-// dropdown, that fits a phone screen. It is maintained by hand: utils/generate-scl.py only writes
+// long citation. The catalog gives each one a short name in a group, ordered for the grouped tuning
+// dropdown, so it fits a phone screen. It is maintained by hand: utils/generate-scl.py only writes
 // sclbundle.go and scl_resources.go, and catalog_test.go checks that both stay in sync.
 
 // Tuning is one entry of the tuning dropdown
 type Tuning struct {
-	Label string // short "Group · Name" label shown to the user
+	Group string // submenu the tuning is listed in
+	Short string // short name within its group
+	Label string // "Group · Short", shown for the selected tuning
 	Name  string // key in AvailableScales
 }
 
-var catalog = []struct {
+type catalogScale struct {
 	filename string
-	label    string
+	name     string
+}
+
+var catalog = []struct {
+	group  string
+	scales []catalogScale
 }{
 	// Equal temperaments and their subsets
-	{"tet-12.scl", "Equal · 12-TET"},
-	{"24-60.scl", "Equal · 12+15-TET (Novaro)"},
-	{"12-31.scl", "Equal · 31-TET meantone 12"},
-	{"19-31.scl", "Equal · 31-TET meantone 19"},
-	{"miracle1.scl", "Equal · 72-TET Miracle 21"},
-	{"fokker_53.scl", "Equal · Fokker 53-tone"},
-	{"carlos_alpha.scl", "Equal · Carlos Alpha"},
-	{"bohlen-p.scl", "Equal · Bohlen-Pierce"},
-
+	{"Equal", []catalogScale{
+		{"tet-12.scl", "12-TET"},
+		{"24-60.scl", "12+15-TET (Novaro)"},
+		{"12-31.scl", "31-TET meantone 12"},
+		{"19-31.scl", "31-TET meantone 19"},
+		{"miracle1.scl", "72-TET Miracle 21"},
+		{"fokker_53.scl", "Fokker 53-tone"},
+		{"carlos_alpha.scl", "Carlos Alpha"},
+		{"bohlen-p.scl", "Bohlen-Pierce"},
+	}},
 	// Just intonation
-	{"pyth_12.scl", "Just · Pythagorean"},
-	{"ji_12.scl", "Just · 7-limit 12 (Rich)"},
-	{"carlos_super.scl", "Just · Carlos Super Just"},
-	{"ptolemy.scl", "Just · Ptolemy/Zarlino"},
-	{"euler.scl", "Just · Euler monochord"},
-	{"euler_diat.scl", "Just · Euler diatonic 8"},
-	{"kepler1.scl", "Just · Kepler monochord 1"},
-	{"kepler2.scl", "Just · Kepler monochord 2"},
-	{"partch_41.scl", "Just · Partch diamond 41"},
-	{"partch_39.scl", "Just · Ur-Partch 39"},
-	{"wilson_31.scl", "Just · Wilson 31-tone"},
-
+	{"Just", []catalogScale{
+		{"pyth_12.scl", "Pythagorean"},
+		{"ji_12.scl", "7-limit 12 (Rich)"},
+		{"carlos_super.scl", "Carlos Super Just"},
+		{"ptolemy.scl", "Ptolemy/Zarlino"},
+		{"euler.scl", "Euler monochord"},
+		{"euler_diat.scl", "Euler diatonic 8"},
+		{"kepler1.scl", "Kepler monochord 1"},
+		{"kepler2.scl", "Kepler monochord 2"},
+		{"partch_41.scl", "Partch diamond 41"},
+		{"partch_39.scl", "Ur-Partch 39"},
+		{"wilson_31.scl", "Wilson 31-tone"},
+	}},
 	// Historic well temperaments and meantones
-	{"dudon_werckmeister3_eb.scl", "Historic · Werckmeister III (EB)"},
-	{"kirnberger1.scl", "Historic · Kirnberger I"},
-	{"kirnberger2.scl", "Historic · Kirnberger II"},
-	{"kirnberger3.scl", "Historic · Kirnberger III"},
-	{"neidhardt1.scl", "Historic · Neidhardt I"},
-	{"neidhardt3.scl", "Historic · Neidhardt III"},
-	{"rameau.scl", "Historic · Rameau meantone"},
-	{"young.scl", "Historic · Young (1807)"},
-	{"kellner.scl", "Historic · Kellner (Bach)"},
-	{"barnes.scl", "Historic · Barnes (Bach)"},
-	{"lehman1.scl", "Historic · Lehman Bach I"},
-	{"lehman2.scl", "Historic · Lehman Bach II"},
-	{"bemetzrieder2.scl", "Historic · Bemetzrieder 2"},
-	{"corrette3.scl", "Historic · Corrette (1753)"},
-
+	{"Historic", []catalogScale{
+		{"dudon_werckmeister3_eb.scl", "Werckmeister III (EB)"},
+		{"kirnberger1.scl", "Kirnberger I"},
+		{"kirnberger2.scl", "Kirnberger II"},
+		{"kirnberger3.scl", "Kirnberger III"},
+		{"neidhardt1.scl", "Neidhardt I"},
+		{"neidhardt3.scl", "Neidhardt III"},
+		{"rameau.scl", "Rameau meantone"},
+		{"young.scl", "Young (1807)"},
+		{"kellner.scl", "Kellner (Bach)"},
+		{"barnes.scl", "Barnes (Bach)"},
+		{"lehman1.scl", "Lehman Bach I"},
+		{"lehman2.scl", "Lehman Bach II"},
+		{"bemetzrieder2.scl", "Bemetzrieder 2"},
+		{"corrette3.scl", "Corrette (1753)"},
+	}},
 	// Scales from other musical traditions
-	{"arabic_rast_on_c.scl", "World · Arabic Rast (C)"},
-	{"arabic_bayati_and_bayati-shuri_on_d.scl", "World · Arabic Bayati (D)"},
-	{"arabic_huzam_on_e.scl", "World · Arabic Huzam (E)"},
-	{"79-159.scl", "World · Turkish maqam 79"},
-	{"dudon_byzantine.scl", "World · Byzantine Hijaz"},
-	{"indian.scl", "World · Indian shruti"},
-	{"indian_12.scl", "World · North Indian 12"},
-	{"chin_lu.scl", "World · Chinese Lü"},
-	{"chin_shierlu.scl", "World · Chinese Shi Er Lü"},
-	{"hirajoshi.scl", "World · Japanese koto"},
-	{"selisir.scl", "World · Bali selisir"},
-	{"alves_pelog.scl", "World · Pelog (Alves)"},
-	{"alves_slendro.scl", "World · Slendro (Alves)"},
+	{"World", []catalogScale{
+		{"arabic_rast_on_c.scl", "Arabic Rast (C)"},
+		{"arabic_bayati_and_bayati-shuri_on_d.scl", "Arabic Bayati (D)"},
+		{"arabic_huzam_on_e.scl", "Arabic Huzam (E)"},
+		{"79-159.scl", "Turkish maqam 79"},
+		{"dudon_byzantine.scl", "Byzantine Hijaz"},
+		{"indian.scl", "Indian shruti"},
+		{"indian_12.scl", "North Indian 12"},
+		{"chin_lu.scl", "Chinese Lü"},
+		{"chin_shierlu.scl", "Chinese Shi Er Lü"},
+		{"hirajoshi.scl", "Japanese koto"},
+		{"selisir.scl", "Bali selisir"},
+		{"alves_pelog.scl", "Pelog (Alves)"},
+		{"alves_slendro.scl", "Slendro (Alves)"},
+	}},
 }
 
 // Tunings returns the bundled scales in dropdown order, the default (12-TET) first
@@ -76,10 +88,12 @@ func Tunings() []Tuning {
 	for name, info := range AvailableScales {
 		byFile[info.Filename] = name
 	}
-	tunings := make([]Tuning, 0, len(catalog))
-	for _, c := range catalog {
-		if name, ok := byFile[c.filename]; ok {
-			tunings = append(tunings, Tuning{Label: c.label, Name: name})
+	var tunings []Tuning
+	for _, g := range catalog {
+		for _, sc := range g.scales {
+			if name, ok := byFile[sc.filename]; ok {
+				tunings = append(tunings, Tuning{Group: g.group, Short: sc.name, Label: g.group + " · " + sc.name, Name: name})
+			}
 		}
 	}
 	return tunings

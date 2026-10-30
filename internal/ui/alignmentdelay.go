@@ -48,18 +48,37 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	}, nil)
 	sampleRateSelect.SetSelected("48000")
 
-	// Common microphone positions for dropdown
-	commonMicPositions := []string{
-		"Kick In", "Kick Out", "Snare Top", "Snare Bottom",
-		"Hi-Hat", "Tom 1", "Tom 2", "Floor Tom",
-		"Overhead L", "Overhead R", "Room L", "Room R",
-		"Vocal", "Guitar Amp", "Bass Amp",
-		"Piano L", "Piano R", "Strings", "Brass", "Ambience",
+	// Common microphone positions, grouped into submenus of the name dropdown
+	micGroup := func(name string, positions ...string) widgets.MenuGroup {
+		g := widgets.MenuGroup{Name: name}
+		for _, p := range positions {
+			g.Options = append(g.Options, widgets.MenuOption{Label: p, Value: p})
+		}
+		return g
+	}
+	commonMicPositions := []widgets.MenuGroup{
+		micGroup("Drums", "Kick In", "Kick Out", "Snare Top", "Snare Bottom",
+			"Hi-Hat", "Tom 1", "Tom 2", "Floor Tom"),
+		micGroup("Overheads & Room", "Overhead L", "Overhead R", "Room L", "Room R", "Ambience"),
+		micGroup("Instruments & Vocals", "Vocal", "Guitar Amp", "Bass Amp",
+			"Piano L", "Piano R", "Strings", "Brass"),
 	}
 
-	// Mic name as Select (dropdown only for consistent height)
-	micNameSelect := widget.NewSelectEntry(commonMicPositions)
+	// Mic name: free text, plus a drop-down button that picks a common position
+	micNameSelect := widget.NewEntry()
 	micNameSelect.SetPlaceHolder("Name")
+	micMenuButton := widget.NewButtonWithIcon("", theme.MenuDropDownIcon(), func() {
+		c := fyne.CurrentApp().Driver().CanvasForObject(micNameSelect)
+		if c == nil {
+			return
+		}
+		menu := widgets.NewGroupedMenu(commonMicPositions, micNameSelect.Text, func(_ widgets.MenuGroup, o widgets.MenuOption) {
+			micNameSelect.SetText(o.Value)
+		})
+		widget.ShowPopUpMenuAtRelativePosition(menu, c, fyne.NewPos(0, micNameSelect.Size().Height), micNameSelect)
+	})
+	micMenuButton.Importance = widget.LowImportance // as in widget.SelectEntry
+	micNameSelect.ActionItem = micMenuButton
 
 	// Target distance input
 	targetDistEntry := widgets.NewNumericEntry()

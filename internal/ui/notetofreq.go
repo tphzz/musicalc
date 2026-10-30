@@ -31,15 +31,15 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Build reference note options (C0 to B9)
 	noteNames := []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-	// Tuning options: short, grouped labels from the scale catalog, default (12-TET) first
-	tunings := sclres.Tunings()
-	tuningOptions := make([]string, len(tunings))
-	tuningByLabel := make(map[string]string, len(tunings))
-	for i, t := range tunings {
-		tuningOptions[i] = t.Label
-		tuningByLabel[t.Label] = t.Name
+	// Tuning options: one submenu per catalog group (Equal, Just, Historic, World), short names inside
+	var tuningGroups []widgets.MenuGroup
+	for _, t := range sclres.Tunings() {
+		if n := len(tuningGroups); n == 0 || tuningGroups[n-1].Name != t.Group {
+			tuningGroups = append(tuningGroups, widgets.MenuGroup{Name: t.Group})
+		}
+		g := &tuningGroups[len(tuningGroups)-1]
+		g.Options = append(g.Options, widgets.MenuOption{Label: t.Short, Value: t.Name})
 	}
-	defaultTuningLabel := tunings[0].Label
 
 	// Reset function
 	resetToDefaults := func() {
@@ -72,11 +72,11 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Track previous Middle C selection to avoid adjusting on unchanged selections
 	previousMiddleC := "C3"
 
-	// Tuning selector (dropdown only, no text entry)
-	tuningSelect := widget.NewSelect(tuningOptions, func(selected string) {
-		_ = tuning.Set(tuningByLabel[selected])
+	// Tuning selector (grouped dropdown with submenus; its values are the scale names)
+	tuningSelect := widgets.NewMenuSelect(tuningGroups, func(name string) {
+		_ = tuning.Set(name)
 	})
-	tuningSelect.SetSelected(defaultTuningLabel)
+	tuningSelect.SetSelected(sclres.DefaultScaleName)
 
 	// Declare table variable first for use in reset button
 	var table *widget.Table
@@ -146,7 +146,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 		refNoteEntry.SetText("A3")
 		freqInput.SetText("440")
 		middleCRadio.SetSelected("C3")
-		tuningSelect.SetSelected(defaultTuningLabel)
+		tuningSelect.SetSelected(sclres.DefaultScaleName)
 		updateCache()
 		if table != nil {
 			table.Refresh()
