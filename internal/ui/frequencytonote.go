@@ -81,7 +81,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	}
 
 	// Quick-select buttons
-	c3Button := widget.NewButton("C3", func() {
+	c3Button := widgets.NewButton("C3", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -94,7 +94,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		}
 	})
 
-	a3Button := widget.NewButton("A3", func() {
+	a3Button := widgets.NewButton("A3", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -107,7 +107,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		}
 	})
 
-	c4Button := widget.NewButton("C4", func() {
+	c4Button := widgets.NewButton("C4", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -120,7 +120,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		}
 	})
 
-	a4Button := widget.NewButton("A4", func() {
+	a4Button := widgets.NewButton("A4", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -134,7 +134,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Play button - generates sine wave tone
-	playButton := widget.NewButtonWithIcon("Play", theme.MediaPlayIcon(), func() {
+	playButton := widgets.NewButtonWithIcon("Play", theme.MediaPlayIcon(), func() {
 		freq := logic.ParseFloat(frequencyEntry.Text)
 		if freq > 0 && freq < 20000 {
 			go audio.PlayFrequency(freq, 3*time.Second)
@@ -142,7 +142,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Reset button
-	resetButton := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetButton := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		frequencyEntry.SetText("440")
 		middleCRadio.SetSelected("C3")
 	})

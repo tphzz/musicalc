@@ -6,8 +6,6 @@ import (
 	"musicalc/internal/logic"
 	sclres "musicalc/internal/logic/scl"
 	"musicalc/internal/ui/widgets"
-	"sort"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -33,41 +31,15 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Build reference note options (C0 to B9)
 	noteNames := []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-	// Build tuning options from available scales (sorted alphabetically with default at top)
-	tuningOptions := make([]string, 0, len(sclres.AvailableScales))
-	for name := range sclres.AvailableScales {
-		tuningOptions = append(tuningOptions, name)
+	// Tuning options: short, grouped labels from the scale catalog, default (12-TET) first
+	tunings := sclres.Tunings()
+	tuningOptions := make([]string, len(tunings))
+	tuningByLabel := make(map[string]string, len(tunings))
+	for i, t := range tunings {
+		tuningOptions[i] = t.Label
+		tuningByLabel[t.Label] = t.Name
 	}
-	sort.Strings(tuningOptions)
-
-	// Move default tuning to the top of the list
-	defaultIdx := -1
-	for i, name := range tuningOptions {
-		if name == sclres.DefaultScaleName {
-			defaultIdx = i
-			break
-		}
-	}
-	if defaultIdx > 0 {
-		// Remove default from its position and prepend to the list
-		tuningOptions = append([]string{sclres.DefaultScaleName}, append(tuningOptions[:defaultIdx], tuningOptions[defaultIdx+1:]...)...)
-	}
-
-	// Some scale names are over 100 characters, which would make the dropdown wider than
-	// the screen, so the options show shortened names that map back to the full scale name
-	maxTuningNameLen := 52
-	if fyne.CurrentDevice().IsMobile() {
-		maxTuningNameLen = 34
-	}
-	tuningByDisplay := make(map[string]string, len(tuningOptions))
-	for i, name := range tuningOptions {
-		display := shortenName(name, maxTuningNameLen)
-		for n := 2; tuningByDisplay[display] != ""; n++ {
-			display = fmt.Sprintf("%s (%d)", shortenName(name, maxTuningNameLen-4), n)
-		}
-		tuningByDisplay[display] = name
-		tuningOptions[i] = display
-	}
+	defaultTuningLabel := tunings[0].Label
 
 	// Reset function
 	resetToDefaults := func() {
@@ -102,9 +74,9 @@ func NewDiapasonTab() fyne.CanvasObject {
 
 	// Tuning selector (dropdown only, no text entry)
 	tuningSelect := widget.NewSelect(tuningOptions, func(selected string) {
-		_ = tuning.Set(tuningByDisplay[selected])
+		_ = tuning.Set(tuningByLabel[selected])
 	})
-	tuningSelect.SetSelected(sclres.DefaultScaleName)
+	tuningSelect.SetSelected(defaultTuningLabel)
 
 	// Declare table variable first for use in reset button
 	var table *widget.Table
@@ -169,12 +141,12 @@ func NewDiapasonTab() fyne.CanvasObject {
 	updateCache()
 
 	// Reset button
-	resetBtn := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetBtn := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 		refNoteEntry.SetText("A3")
 		freqInput.SetText("440")
 		middleCRadio.SetSelected("C3")
-		tuningSelect.SetSelected(sclres.DefaultScaleName)
+		tuningSelect.SetSelected(defaultTuningLabel)
 		updateCache()
 		if table != nil {
 			table.Refresh()
@@ -277,7 +249,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Wrap table in responsive container with proportional column widths
 	// Proportions: Note (18%), Frequency (32%), Cents (22%), MIDI (28%)
 	// minWidth stays below phone widths (~340) so the proportions also apply on Android
-	responsiveTableWidget := NewResponsiveTable(table, []float32{0.18, 0.32, 0.22, 0.28}, 300, 20)
+	responsiveTableWidget := NewResponsiveTable(table, []float32{0.18, 0.32, 0.22, 0.28}, 300, 0)
 
 	// scrollToReference shows the reference note near the top with two rows of context above it.
 	// Scrolling up to a row puts it at the top (behind the sticky header, hence 3 rows), so jump
@@ -369,22 +341,11 @@ func NewDiapasonTab() fyne.CanvasObject {
 				widget.NewLabel("Middle C"),
 				middleCRadio,
 			),
-			container.NewGridWithColumns(2,
-				tuningSelect,
-				resetBtn,
-			),
+			// The tuning dropdown takes all the width Reset leaves, so its labels show in full
+			container.NewBorder(nil, nil, nil, resetBtn, tuningSelect),
 			widget.NewSeparator(),
 		),
 		nil, nil, nil,
 		responsiveTableWidget,
 	)
-}
-
-// shortenName truncates name to at most maxLen characters, ending it with an ellipsis
-func shortenName(name string, maxLen int) string {
-	runes := []rune(name)
-	if len(runes) <= maxLen {
-		return name
-	}
-	return strings.TrimRight(string(runes[:maxLen-1]), " ,.;:-") + "…"
 }

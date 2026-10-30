@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"math"
+
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -11,7 +14,7 @@ type ResponsiveTable struct {
 	table             *widget.Table
 	columnProportions []float32 // Proportions for each column (should sum to 1.0)
 	minWidth          float32   // Minimum total width before applying proportions
-	padding           float32   // Reserved space for padding and separators
+	padding           float32   // Extra space to leave free, beyond the gaps between columns
 
 	// OnFirstLayout is called once, when the table first gets a size (e.g. to scroll to a row)
 	OnFirstLayout func()
@@ -21,7 +24,7 @@ type ResponsiveTable struct {
 // NewResponsiveTable creates a responsive table with proportional column widths
 // columnProportions: array of proportions for each column (e.g., [0.25, 0.5, 0.25] for 25%/50%/25%)
 // minWidth: minimum total width before scaling kicks in (default 300)
-// padding: space to reserve for padding/separators (default 20)
+// padding: extra space to leave free beyond the column gaps, which are subtracted automatically
 func NewResponsiveTable(table *widget.Table, columnProportions []float32, minWidth, padding float32) *ResponsiveTable {
 	if minWidth <= 0 {
 		minWidth = 300
@@ -85,7 +88,9 @@ func (r *ResponsiveTable) updateColumnWidths(width float32) {
 		return
 	}
 
-	availableWidth := width - r.padding
+	// The table puts a theme padding between columns; any width beyond ours makes it scroll sideways
+	gaps := float32(len(r.columnProportions)-1) * r.table.Theme().Size(theme.SizeNamePadding)
+	availableWidth := width - gaps - r.padding
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -93,7 +98,8 @@ func (r *ResponsiveTable) updateColumnWidths(width float32) {
 	// This prevents horizontal scrolling when container is narrower than minWidth
 
 	for i, proportion := range r.columnProportions {
-		columnWidth := availableWidth * proportion
+		// Round down so the columns never add up to more than the available width
+		columnWidth := float32(math.Floor(float64(availableWidth * proportion)))
 		r.table.SetColumnWidth(i, columnWidth)
 	}
 }

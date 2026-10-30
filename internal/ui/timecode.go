@@ -39,10 +39,15 @@ func NewTimecodeTab() fyne.CanvasObject {
 		fyne.CurrentApp().Driver().CanvasForObject(timecode2Entry).Focus(timecode2Entry)
 	}
 
-	// History display (multi-line entry for copy/paste support)
-	historyText := widget.NewMultiLineEntry()
+	// Programmatic focus opens the on-screen keyboard on mobile, so there it only follows typing
+	isMobile := fyne.CurrentDevice().IsMobile()
+
+	// History display: read-only text. Desktop can select and copy it; on mobile it must not be
+	// focusable, because focusing anything opens the keyboard.
+	historyText := widget.NewLabel("")
 	historyText.Wrapping = fyne.TextWrapWord
 	historyText.TextStyle.Monospace = true // Monospace for better alignment
+	historyText.Selectable = !isMobile
 	historyList := []string{}
 
 	// Create scroll container early so operations can auto-scroll to bottom
@@ -109,7 +114,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 			resultTC, maxWidth, resultFrames, fpsLabel)
 	}
 
-	// Cap history so re-laying out the wrapped multi-line entry stays cheap
+	// Cap history so re-laying out the wrapped text stays cheap
 	const maxHistoryEntries = 100
 
 	pushHistory := func(entry string) {
@@ -179,12 +184,14 @@ func NewTimecodeTab() fyne.CanvasObject {
 		calculateTimecode1()
 		calculateTimecode2()
 
-		// Focus Timecode 2 for next input after FPS change
-		fyne.CurrentApp().Driver().CanvasForObject(timecode2Entry).Focus(timecode2Entry)
+		// Focus Timecode 2 for next input after FPS change (desktop only, see isMobile)
+		if !isMobile {
+			fyne.CurrentApp().Driver().CanvasForObject(timecode2Entry).Focus(timecode2Entry)
+		}
 	}
 
 	// Add operation
-	addButton := widget.NewButton("+", func() {
+	addButton := widgets.NewButton("+", func() {
 		h1, m1, s1, f1 := timecode1Entry.GetComponents()
 		h2, m2, s2, f2 := timecode2Entry.GetComponents()
 
@@ -215,7 +222,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 	addButton.Importance = widget.HighImportance
 
 	// Subtract operation
-	subtractButton := widget.NewButton("-", func() {
+	subtractButton := widgets.NewButton("-", func() {
 		h1, m1, s1, f1 := timecode1Entry.GetComponents()
 		h2, m2, s2, f2 := timecode2Entry.GetComponents()
 
@@ -258,7 +265,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 	timecode2Entry.OnOperationKey = handleOperationKey
 
 	// Reset operation
-	resetButton := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetButton := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		updating = true
 		timecode1Entry.SetText("")
 		timecode2Entry.SetText("")
@@ -268,12 +275,14 @@ func NewTimecodeTab() fyne.CanvasObject {
 		calculateTimecode1()
 		calculateTimecode2()
 
-		// Focus Timecode 1 for next input
-		fyne.CurrentApp().Driver().CanvasForObject(timecode1Entry).Focus(timecode1Entry)
+		// Focus Timecode 1 for next input (desktop only, see isMobile)
+		if !isMobile {
+			fyne.CurrentApp().Driver().CanvasForObject(timecode1Entry).Focus(timecode1Entry)
+		}
 	})
 
 	// Clear History operation
-	clearHistoryButton := widget.NewButton("Clear Hist.", func() {
+	clearHistoryButton := widgets.NewButton("Clear Hist.", func() {
 		historyList = []string{}
 		historyText.SetText("")
 	})

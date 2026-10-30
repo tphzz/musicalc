@@ -2,6 +2,7 @@ package main
 
 import (
 	"musicalc/internal/ui"
+	"musicalc/internal/ui/widgets"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -20,9 +21,17 @@ type CategoryInfo struct {
 	TabIndices []int
 }
 
+// tabInfo describes one calculator tab; its content is built the first time it is shown
+type tabInfo struct {
+	text    string // tab label on desktop; mobile shows icons only
+	heading string
+	icon    fyne.Resource
+	build   func() fyne.CanvasObject
+}
+
 // createCompactHeader creates a compact header with: hamburger + "category / tab heading"
 func createCompactHeader(window fyne.Window, categories []CategoryInfo, switchCategory func(int), headerLabel *widget.Label) *fyne.Container {
-	menuButton := widget.NewButtonWithIcon("", theme.MenuIcon(), func() {
+	menuButton := widgets.NewButtonWithIcon("", theme.MenuIcon(), func() {
 		showCategoryMenu(window, categories, switchCategory)
 	})
 	menuButton.Importance = widget.LowImportance
@@ -50,78 +59,18 @@ func main() {
 		window.SetIcon(icon)
 	}
 
-	tabHeadings := map[string]string{
-		"timecode":     "Timecode Calculator",
-		"tempo":        "Tempo to Delay",
-		"tempochange":  "Tempo Change",
-		"note2freq":    "Note to Frequency",
-		"freq2note":    "Frequency to Note",
-		"samplelength": "Sample Length",
-		"alignment":    "Alignment Delay",
+	tabs := []tabInfo{
+		{"Timecode", "Timecode Calculator", ui.ResourceTimecodeSvg, ui.NewTimecodeTab},
+		{"Delay", "Tempo to Delay", ui.ResourceDelaySvg, ui.NewTempoTab},
+		{"Tempo Chg", "Tempo Change", ui.ResourceTempochangeSvg, ui.NewTempoChangeTab},
+		{"Note→Freq", "Note to Frequency", ui.ResourceNote2freqSvg, ui.NewDiapasonTab},
+		{"Freq→Note", "Frequency to Note", ui.ResourceFreq2noteSvg, ui.NewFrequencyToNoteTab},
+		{"Sample Len", "Sample Length", ui.ResourceSamplelengthSvg, ui.NewSampleLengthTab},
+		{"Align Dly", "Alignment Delay", ui.ResourceAlignmentdelaySvg, ui.NewAlignmentDelayTab},
 	}
-
-	var switchCategory func(int)
-
-	// Determine tab text based on device type
+	// Mobile shows icons only (larger, in fixed-width tabs)
 	isMobile := fyne.CurrentDevice().IsMobile()
-	var timecodeText, tempoText, tempoChangeText, note2freqText, freq2noteText, sampleLengthText, alignmentText string
-	if !isMobile {
-		timecodeText = "Timecode"
-		tempoText = "Delay"
-		tempoChangeText = "Tempo Chg"
-		note2freqText = "Note→Freq"
-		freq2noteText = "Freq→Note"
-		sampleLengthText = "Sample Len"
-		alignmentText = "Align Dly"
-	}
 
-	// Create all tab items with empty placeholders; content is built on first display
-	// so startup only pays for the tab that is actually shown
-	timecodeTab := container.NewTabItemWithIcon(timecodeText, ui.ResourceTimecodeSvg, container.NewStack())
-	tempoTab := container.NewTabItemWithIcon(tempoText, ui.ResourceDelaySvg, container.NewStack())
-	tempoChangeTab := container.NewTabItemWithIcon(tempoChangeText, ui.ResourceTempochangeSvg, container.NewStack())
-	note2freqTab := container.NewTabItemWithIcon(note2freqText, ui.ResourceNote2freqSvg, container.NewStack())
-	freq2noteTab := container.NewTabItemWithIcon(freq2noteText, ui.ResourceFreq2noteSvg, container.NewStack())
-	sampleLengthTab := container.NewTabItemWithIcon(sampleLengthText, ui.ResourceSamplelengthSvg, container.NewStack())
-	alignmentTab := container.NewTabItemWithIcon(alignmentText, ui.ResourceAlignmentdelaySvg, container.NewStack())
-
-	// Create single AppTabs with ALL tabs (maintains left alignment)
-	allTabs := []*container.TabItem{
-		timecodeTab, tempoTab, tempoChangeTab,
-		note2freqTab, freq2noteTab,
-		sampleLengthTab,
-		alignmentTab,
-	}
-
-	// Content builders for each global tab index
-	tabBuilders := []func() fyne.CanvasObject{
-		ui.NewTimecodeTab, ui.NewTempoTab, ui.NewTempoChangeTab,
-		ui.NewDiapasonTab, ui.NewFrequencyToNoteTab,
-		ui.NewSampleLengthTab,
-		ui.NewAlignmentDelayTab,
-	}
-	tabBuilt := make([]bool, len(allTabs))
-
-	// ensureBuilt creates a tab's content the first time it is shown; returns true if it was built now
-	ensureBuilt := func(item *container.TabItem) bool {
-		for i, tab := range allTabs {
-			if tab == item {
-				if tabBuilt[i] {
-					return false
-				}
-				tabBuilt[i] = true
-				tab.Content = tabBuilders[i]()
-				return true
-			}
-		}
-		return false
-	}
-	ensureBuilt(timecodeTab)
-
-	tabs := container.NewAppTabs(allTabs...)
-	tabs.SetTabLocation(container.TabLocationBottom)
-
-	// Define categories with their tab indices
 	categories := []CategoryInfo{
 		{Name: "Time & Tempo", TabIndices: []int{0, 1, 2}},
 		{Name: "Frequency & Pitch", TabIndices: []int{3, 4}},
@@ -129,107 +78,60 @@ func main() {
 		{Name: "Multi-Mic", TabIndices: []int{6}},
 	}
 
-	// Tab heading keys for each global tab index
-	tabHeadingKeys := []string{
-		"timecode", "tempo", "tempochange",
-		"note2freq", "freq2note",
-		"samplelength",
-		"alignment",
-	}
-
 	// Always start with Time & Tempo category (Timecode Calculator)
 	currentCategoryIndex := 0
 
 	headerLabel := widget.NewLabel("")
+	content := container.NewStack()
+	tabBar := widgets.NewTabBar()
+	built := make([]fyne.CanvasObject, len(tabs))
 
-	// Helper to show only tabs for a specific category
+	// showTab shows a tab by its global index, building its content on first use.
+	// Built tabs are kept, so their inputs survive switching away and back.
+	showTab := func(index int) {
+		if built[index] == nil {
+			built[index] = tabs[index].build()
+		}
+		content.Objects = []fyne.CanvasObject{built[index]}
+		content.Refresh()
+		headerLabel.SetText(categories[currentCategoryIndex].Name + " / " + tabs[index].heading)
+	}
+
+	tabBar.OnSelected = func(i int) {
+		showTab(categories[currentCategoryIndex].TabIndices[i])
+	}
+
+	// showCategoryTabs shows the tabs of a category and selects its first tab
 	showCategoryTabs := func(categoryIdx int) {
-		if categoryIdx < 0 || categoryIdx >= len(categories) {
-			return
-		}
-
 		cat := categories[categoryIdx]
-
-		// Build list of visible tabs for this category
-		var visibleTabs []*container.TabItem
-		for _, tabIdx := range cat.TabIndices {
-			if tabIdx >= 0 && tabIdx < len(allTabs) {
-				visibleTabs = append(visibleTabs, allTabs[tabIdx])
+		items := make([]widgets.TabBarItem, len(cat.TabIndices))
+		for i, tabIdx := range cat.TabIndices {
+			items[i] = widgets.TabBarItem{Icon: tabs[tabIdx].icon}
+			if !isMobile {
+				items[i].Text = tabs[tabIdx].text
 			}
 		}
-
-		// Replace tabs.Items with visible tabs
-		tabs.Items = visibleTabs
-
-		// Select first tab in category
-		if len(visibleTabs) > 0 {
-			ensureBuilt(visibleTabs[0])
-			tabs.Select(visibleTabs[0])
-		}
-
-		tabs.Refresh()
+		tabBar.SetItems(items, 0)
+		showTab(cat.TabIndices[0])
 	}
 
-	// Helper to update header text based on selected tab
-	updateHeader := func() {
-		selectedTab := tabs.Selected()
-		if selectedTab == nil {
+	showCategoryTabs(currentCategoryIndex)
+
+	switchCategory := func(index int) {
+		if index < 0 || index >= len(categories) || index == currentCategoryIndex {
 			return
 		}
-
-		// Find which tab is selected
-		for i, tab := range allTabs {
-			if tab == selectedTab {
-				// Find category for this tab
-				for _, cat := range categories {
-					for _, tabIdx := range cat.TabIndices {
-						if tabIdx == i {
-							headerText := cat.Name + " / " + tabHeadings[tabHeadingKeys[i]]
-							headerLabel.SetText(headerText)
-							return
-						}
-					}
-				}
-			}
-		}
+		currentCategoryIndex = index
+		showCategoryTabs(index)
+		myApp.Preferences().SetInt("lastCategory", index)
 	}
 
-	// Set initial category tabs visibility
-	showCategoryTabs(currentCategoryIndex)
-	updateHeader()
-
-	// Update header when tab changes
-	tabs.OnSelected = func(item *container.TabItem) {
-		if ensureBuilt(item) {
-			tabs.Refresh()
-		}
-		updateHeader()
-	}
-
-	// Function to switch categories
-	switchCategory = func(index int) {
-		if index >= 0 && index < len(categories) {
-			if index == currentCategoryIndex {
-				return
-			}
-
-			currentCategoryIndex = index
-			showCategoryTabs(index)
-			updateHeader()
-
-			myApp.Preferences().SetInt("lastCategory", index)
-		}
-	}
-
-	// Create initial header and content
 	header := createCompactHeader(window, categories, switchCategory, headerLabel)
-
-	content := container.NewBorder(
+	window.SetContent(ui.NewShell(
 		container.NewVBox(header, widget.NewSeparator()),
-		nil, nil, nil,
-		tabs,
-	)
-	window.SetContent(content)
+		content,
+		container.NewVBox(widget.NewSeparator(), tabBar),
+	))
 	window.ShowAndRun()
 }
 

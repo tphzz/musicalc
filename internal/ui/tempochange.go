@@ -284,7 +284,7 @@ func NewTempoChangeTab() fyne.CanvasObject {
 	centsEntry.OnChanged = func(s string) { calcFromTranspose() }
 
 	// Swap button to swap original and new tempo
-	swapBtn := widget.NewButtonWithIcon("Swap", theme.ContentRedoIcon(), func() {
+	swapBtn := widgets.NewButtonWithIcon("Swap", theme.ContentRedoIcon(), func() {
 		origText := originalTempoEntry.Text
 		newText := newTempoEntry.Text
 		originalTempoEntry.SetText(newText)
@@ -292,7 +292,7 @@ func NewTempoChangeTab() fyne.CanvasObject {
 	})
 
 	// Reset button
-	resetBtn := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetBtn := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 	})
 

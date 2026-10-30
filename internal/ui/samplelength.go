@@ -173,7 +173,7 @@ func NewSampleLengthTab() fyne.CanvasObject {
 	calcFromTempo()
 
 	// Reset button
-	resetBtn := widget.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetBtn := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 		sampleRateSelect.SetText("44100")
 		beatsInput.SetText("4")

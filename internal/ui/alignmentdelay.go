@@ -20,7 +20,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	isMobile := fyne.CurrentDevice().IsMobile()
 
 	// Temperature input
-	tempEntry := widget.NewEntry()
+	tempEntry := widgets.NewNumericEntry()
 	//tempEntry.SetText("22")
 	tempEntry.SetPlaceHolder("Room Temp.")
 	if isMobile {
@@ -31,7 +31,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	tempUnitSelect.SetSelected("C")
 
 	// Reference distance input
-	refDistEntry := widget.NewEntry()
+	refDistEntry := widgets.NewNumericEntry()
 	//refDistEntry.SetText("5")
 	refDistEntry.SetPlaceHolder("Ref. Dist.")
 
@@ -62,7 +62,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	micNameSelect.SetPlaceHolder("Name")
 
 	// Target distance input
-	targetDistEntry := widget.NewEntry()
+	targetDistEntry := widgets.NewNumericEntry()
 	targetDistEntry.SetPlaceHolder("Distance to Ref.")
 	if isMobile {
 		targetDistEntry.SetPlaceHolder("Distance")
@@ -95,6 +95,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		name.Truncation = fyne.TextTruncateEllipsis
 		unit := targetUnitSelect.Selected
 		distance := widgets.NewMutedText(formatTrimFloat(logic.FromMeters(mic.DistanceMeters, unit), 3) + " " + unit)
+		// A plain button: the touch-responsive widgets.Button would stop drags on it from scrolling the list
 		removeBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			calc.RemoveMicAt(index)
 			refreshMics()
@@ -138,7 +139,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	}
 
 	// Add microphone button with emphasis
-	addButton := widget.NewButton("+", func() {
+	addButton := widgets.NewButton("+", func() {
 		name := strings.TrimSpace(micNameSelect.Text)
 		if name == "" {
 			name = fmt.Sprintf("Mic %d", len(calc.Mics)+1)
@@ -169,8 +170,10 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	refDistEntry.Resize(fyne.NewSize(80, refDistEntry.MinSize().Height))
 	targetDistEntry.Resize(fyne.NewSize(80, targetDistEntry.MinSize().Height))
 
+	// fixedWrap gives obj a fixed width; its height follows the row, so selects and buttons
+	// line up with the (taller) entries next to them
 	fixedWrap := func(obj fyne.CanvasObject, w float32) fyne.CanvasObject {
-		return container.NewGridWrap(fyne.NewSize(w, obj.MinSize().Height), obj)
+		return container.New(fixedWidthLayout{width: w}, obj)
 	}
 
 	// Top section: Temperature, Reference, and Sample Rate on same row
@@ -211,10 +214,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	// Emphasize the add button and make it wider
 	addButton.Importance = widget.HighImportance
 
-	fixedAddButton := container.NewGridWrap(
-		fyne.NewSize(50, micNameSelect.MinSize().Height),
-		addButton,
-	)
+	fixedAddButton := fixedWrap(addButton, 50)
 
 	micRow := container.NewBorder(
 		nil, nil, nil,
@@ -240,4 +240,24 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	)
 
 	return content
+}
+
+// fixedWidthLayout sizes its object to a fixed width and the full height it is given
+type fixedWidthLayout struct {
+	width float32
+}
+
+func (l fixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objects {
+		o.Move(fyne.NewPos(0, 0))
+		o.Resize(size)
+	}
+}
+
+func (l fixedWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var height float32
+	for _, o := range objects {
+		height = fyne.Max(height, o.MinSize().Height)
+	}
+	return fyne.NewSize(l.width, height)
 }
