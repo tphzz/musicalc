@@ -3,7 +3,7 @@ project_name: musicalc
 dist: build/dist
 
 snapshot:
-  version_template: "{{ .Env.MUSICALC_SNAPSHOT_VERSION }}"
+  version_template: '{{ if index .Env "MUSICALC_SNAPSHOT_VERSION" }}{{ index .Env "MUSICALC_SNAPSHOT_VERSION" }}{{ else }}{{ .Version }}-snapshot.g{{ .ShortCommit }}{{ end }}'
 
 builds:
   - id: linux-arm64

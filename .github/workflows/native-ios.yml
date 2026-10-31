@@ -1,0 +1,23 @@
+name: 16 Build - iPhone
+run-name: "${{ github.workflow }} | ${{ github.ref_name }}"
+on:
+  workflow_dispatch:
+    inputs:
+      upload_testflight:
+        description: "Upload to App Store Connect after runner onboarding"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: iphone-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  checks:
+    uses: ./.github/workflows/native-checks.yml
+  build:
+    needs: checks
+    uses: ./.github/workflows/native-ios-platform.yml
+    with:
+      upload_testflight: ${{ inputs.upload_testflight }}

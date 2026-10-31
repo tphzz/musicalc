@@ -1,0 +1,61 @@
+name: 91 Helper - Linux and Windows
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string
+      arch:
+        required: true
+        type: string
+      runner_labels:
+        required: true
+        type: string
+      host_group:
+        required: true
+        type: string
+permissions:
+  contents: read
+env:
+  GOTOOLCHAIN: local
+  PYTHONDONTWRITEBYTECODE: "1"
+jobs:
+  build:
+    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    timeout-minutes: 60
+    concurrency:
+      group: ${{ inputs.host_group }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.14"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.2"
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7
+        with:
+          install-only: true
+          version: v2.15.4
+      - name: Resolve version
+        run: python build/scripts/version.py --github
+      - name: Native tests and packaging
+        env:
+          BUILD_PLATFORM: ${{ inputs.platform }}
+          BUILD_ARCH: ${{ inputs.arch }}
+        run: python build/scripts/build-platform.py "$BUILD_PLATFORM" "$BUILD_ARCH"
+        shell: bash
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-${{ inputs.platform }}-${{ inputs.arch }}
+          overwrite: true
+          if-no-files-found: error
+          path: |
+            build/dist/*_windows_*.exe
+            build/dist/*.tar.gz
+            build/dist/*.deb
+            build/dist/*.rpm

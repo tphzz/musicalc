@@ -1,0 +1,23 @@
+name: 12 Build - macOS Universal
+run-name: "${{ github.workflow }} | ${{ github.ref_name }}"
+on:
+  workflow_dispatch:
+    inputs:
+      notarize_macos:
+        description: "Notarize branch snapshots (mandatory for release tags)"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  checks:
+    uses: ./.github/workflows/native-checks.yml
+  build:
+    needs: checks
+    uses: ./.github/workflows/native-macos-platform.yml
+    with:
+      notarize_macos: ${{ inputs.notarize_macos }}

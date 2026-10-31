@@ -1,0 +1,37 @@
+name: 93 Helper - Android ARM64
+on:
+  workflow_call:
+permissions:
+  contents: read
+env:
+  GOTOOLCHAIN: local
+  PYTHONDONTWRITEBYTECODE: "1"
+jobs:
+  build:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 60
+    concurrency:
+      group: native-x64-host
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.14"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.2"
+      - name: Install pinned Fyne packaging CLI
+        run: go install fyne.io/tools/cmd/fyne@v1.7.3
+      - name: Build and verify Android APK
+        shell: pwsh
+        run: ./build/scripts/build-android.ps1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-android-arm64
+          path: build/dist/*_android_arm64.apk
+          overwrite: true
+          if-no-files-found: error

@@ -1,0 +1,16 @@
+name: 15 Build - Android ARM64
+run-name: "${{ github.workflow }} | ${{ github.ref_name }}"
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  checks:
+    uses: ./.github/workflows/native-checks.yml
+  build:
+    needs: checks
+    uses: ./.github/workflows/native-android-platform.yml

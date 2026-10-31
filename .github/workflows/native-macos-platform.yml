@@ -1,0 +1,49 @@
+name: 92 Helper - macOS Universal
+on:
+  workflow_call:
+    inputs:
+      notarize_macos:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+env:
+  GOTOOLCHAIN: local
+  PYTHONDONTWRITEBYTECODE: "1"
+jobs:
+  build:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 90
+    concurrency:
+      group: native-apple-silicon-host
+      cancel-in-progress: false
+      queue: max
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      MACOSX_DEPLOYMENT_TARGET: "13.3"
+      MUSICALC_NOTARIZE: ${{ inputs.notarize_macos }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.14"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.2"
+      - name: Verify Xcode and prepare scratch directory
+        run: |
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-path
+          mkdir -p build/.cache
+      - name: Build, test, sign, and package
+        run: bash build/scripts/build-macos.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-macos-universal
+          path: |
+            build/dist/macos/*.zip
+            build/dist/macos/*.dmg
+          overwrite: true
+          if-no-files-found: error
