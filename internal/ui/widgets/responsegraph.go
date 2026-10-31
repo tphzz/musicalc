@@ -1,31 +1,50 @@
 package widgets
 
 import (
+	"image"
 	"image/color"
 	"math"
 	"strconv"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/srwiley/rasterx"
+	"golang.org/x/image/math/fixed"
 )
 
 // GraphCurve is one level curve: levels in dB at the given frequencies (sorted). A Before curve is
 // drawn dashed and muted, to compare a change with the state before it.
+//
+// A comb repeats every Spacing Hz between EnvLo and EnvHi dB. On a log scale its cycles get
+// narrower towards high frequencies; where a cycle is narrower than a few pixels, the curve is drawn
+// as a band between EnvLo and EnvHi instead of a line that could only scribble. Spacing 0 means no comb.
 type GraphCurve struct {
 	Freqs  []float64
 	Levels []float64
 	Before bool
+
+	Spacing      float64
+	EnvLo, EnvHi float64
 }
 
-// Response graph scale and size
+// Response graph scale, size and strokes
 const (
 	graphTopDB    = 9.0
 	graphBottomDB = -24.0
 	graphHeight   = 150
-	graphDash     = 4 // dashed curves: drawn and skipped lengths
-	graphGap      = 3
+
+	graphLineWidth   = 2.5 // the current curve
+	graphBeforeWidth = 1.25
+	graphDash        = 4 // dashed before-curve: drawn and skipped lengths
+	graphGap         = 3
+
+	// graphMinCyclePx is the narrowest comb cycle, in pixels, still drawn as a line; a dashed
+	// before-curve needs wider cycles to stay readable, so it turns into its band earlier
+	graphMinCyclePx       = 6
+	graphMinBeforeCyclePx = 14
 )
 
 // graphGridDB are the level lines with labels
@@ -63,12 +82,29 @@ func (g *ResponseGraph) SetData(minF, maxF float64, curves []GraphCurve, bandLo,
 
 // CreateRenderer is a private method to Fyne which links this widget to its renderer
 func (g *ResponseGraph) CreateRenderer() fyne.WidgetRenderer {
-	return &responseGraphRenderer{g: g}
+	r := &responseGraphRenderer{g: g}
+	r.raster = canvas.NewRaster(r.drawCurves)
+	return r
+}
+
+// graphPolyline is a curve's line part in graph coordinates, drawn into the raster
+type graphPolyline struct {
+	points []fyne.Position
+	color  color.Color
+	width  float32
+	dashed bool
 }
 
 type responseGraphRenderer struct {
 	g       *ResponseGraph
 	objects []fyne.CanvasObject
+
+	// The curves are drawn anti-aliased into a raster at the device's pixel density; grid, bands and
+	// labels stay canvas objects, which are crisp anyway
+	raster    *canvas.Raster
+	mu        sync.Mutex
+	lines     []graphPolyline
+	plotWidth float32
 }
 
 func (r *responseGraphRenderer) labelSize() float32 {
@@ -83,6 +119,7 @@ func (r *responseGraphRenderer) Layout(size fyne.Size) { r.build(size) }
 
 func (r *responseGraphRenderer) Refresh() {
 	r.build(r.g.Size())
+	r.raster.Refresh()
 	canvas.Refresh(r.g)
 }
 
@@ -90,11 +127,49 @@ func (r *responseGraphRenderer) Objects() []fyne.CanvasObject { return r.objects
 
 func (r *responseGraphRenderer) Destroy() {}
 
-// build creates the graph's lines and labels for the given size
+// drawCurves renders the curves' line parts at the raster's pixel size
+func (r *responseGraphRenderer) drawCurves(w, h int) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	r.mu.Lock()
+	lines, plotWidth := r.lines, r.plotWidth
+	r.mu.Unlock()
+	if plotWidth <= 0 || w <= 0 || h <= 0 {
+		return img
+	}
+	scale := float64(w) / float64(plotWidth) // device pixels per graph unit
+	scanner := rasterx.NewScannerGV(w, h, img, img.Bounds())
+	dasher := rasterx.NewDasher(w, h, scanner)
+	for _, l := range lines {
+		if len(l.points) < 2 {
+			continue
+		}
+		var dashes []float64
+		if l.dashed {
+			dashes = []float64{graphDash * scale, graphGap * scale}
+		}
+		width := fixed.Int26_6(float64(l.width) * scale * 64)
+		dasher.SetStroke(width, 4*64, rasterx.RoundCap, rasterx.RoundCap, rasterx.RoundGap, rasterx.Round, dashes, 0)
+		dasher.SetColor(l.color)
+		p := l.points[0]
+		dasher.Start(rasterx.ToFixedP(float64(p.X)*scale, float64(p.Y)*scale))
+		for _, p := range l.points[1:] {
+			dasher.Line(rasterx.ToFixedP(float64(p.X)*scale, float64(p.Y)*scale))
+		}
+		dasher.Stop(false)
+		dasher.Draw()
+		dasher.Clear()
+	}
+	return img
+}
+
+// build creates the graph's grid, bands and labels for the given size, and the curves for the raster
 func (r *responseGraphRenderer) build(size fyne.Size) {
 	g := r.g
 	r.objects = r.objects[:0]
 	if size.Width <= 0 || g.minF <= 0 || g.maxF <= g.minF {
+		r.mu.Lock()
+		r.lines = nil
+		r.mu.Unlock()
 		return
 	}
 	th := g.Theme()
@@ -121,27 +196,27 @@ func (r *responseGraphRenderer) build(size fyne.Size) {
 		l.Position1, l.Position2 = fyne.NewPos(x1, y1), fyne.NewPos(x2, y2)
 		r.objects = append(r.objects, l)
 	}
-	text := func(s string, c color.Color, px, py float32, alignRight bool) {
+	rect := func(x0, y0, x1, y1 float32, c color.Color) {
+		rc := canvas.NewRectangle(c)
+		rc.Move(fyne.NewPos(x0, y0))
+		rc.Resize(fyne.NewSize(x1-x0, float32(math.Max(float64(y1-y0), 1))))
+		r.objects = append(r.objects, rc)
+	}
+	text := func(s string, c color.Color, px, py float32) {
 		t := canvas.NewText(s, c)
 		t.TextSize = r.labelSize()
 		ts := t.MinSize()
-		if alignRight {
-			px -= ts.Width
-		}
 		px = float32(math.Max(0, math.Min(float64(px), float64(w-ts.Width))))
 		t.Move(fyne.NewPos(px, py))
 		t.Resize(ts)
 		r.objects = append(r.objects, t)
 	}
 
-	// Range of interest
+	// Range of interest: a neutral tint, so the blue curve stands out on it
 	if g.bandHi > g.bandLo && g.bandLo > 0 {
 		lo, hi := x(math.Max(g.bandLo, g.minF)), x(math.Min(g.bandHi, g.maxF))
 		if hi > lo {
-			band := canvas.NewRectangle(withAlpha(primary, 0x38))
-			band.Move(fyne.NewPos(lo, 0))
-			band.Resize(fyne.NewSize(hi-lo, h))
-			r.objects = append(r.objects, band)
+			rect(lo, 0, hi, h, withAlpha(fg, 0x16))
 		}
 	}
 	// Grid: level lines and frequency lines
@@ -162,75 +237,77 @@ func (r *responseGraphRenderer) build(size fyne.Size) {
 		line(x(f), 0, x(f), h, withAlpha(muted, 0x30), 1)
 	}
 
-	// Curves: the before curve first, so the current one is drawn on top
+	// Curves: their line parts go into the raster, their dense parts become bands. The before
+	// curve comes first, so the current one is drawn on top.
+	var lines []graphPolyline
+	var bands []fyne.CanvasObject
 	for _, before := range []bool{true, false} {
 		for _, c := range g.curves {
 			if c.Before != before || len(c.Freqs) < 2 || len(c.Freqs) != len(c.Levels) {
 				continue
 			}
-			col, width := primary, float32(2)
+			// Above denseFrom the comb's cycles are too narrow to draw as a line
+			denseFrom := math.Inf(1)
+			if c.Spacing > 0 {
+				minPx := float64(graphMinCyclePx)
+				if before {
+					minPx = graphMinBeforeCyclePx
+				}
+				denseFrom = c.Spacing / (math.Exp(minPx*math.Log(g.maxF/g.minF)/float64(w)) - 1)
+			}
+			pl := graphPolyline{color: primary, width: graphLineWidth}
 			if before {
-				col, width = withAlpha(muted, 0xc0), 1.5
+				pl = graphPolyline{color: withAlpha(muted, 0xa0), width: graphBeforeWidth, dashed: true}
 			}
-			// Several samples in one pixel column (a dense comb) are drawn as one vertical line from
-			// their lowest to their highest level, so the graph shows how far the level swings there
-			type column struct{ x, first, last, min, max float32 }
-			var cols []column
-			for i := range c.Freqs {
-				px, py := float32(math.Round(float64(x(c.Freqs[i])))), y(c.Levels[i])
-				if n := len(cols); n > 0 && cols[n-1].x == px {
-					cl := &cols[n-1]
-					cl.last = py
-					cl.min, cl.max = float32(math.Min(float64(cl.min), float64(py))), float32(math.Max(float64(cl.max), float64(py)))
-					continue
+			for i, f := range c.Freqs {
+				if i > 0 && c.Freqs[i-1] >= denseFrom {
+					break
 				}
-				cols = append(cols, column{x: px, first: py, last: py, min: py, max: py})
+				pl.points = append(pl.points, fyne.NewPos(x(f), y(c.Levels[i])))
 			}
-			var travelled float32 // along the curve, for the dash pattern
-			for i, cl := range cols {
-				if cl.max-cl.min > 0.5 {
-					band := col
-					if before {
-						band = withAlpha(muted, 0x60) // keep a dense before-curve in the background
-					}
-					line(cl.x, cl.min, cl.x, cl.max, band, width/2+0.5)
+			lines = append(lines, pl)
+
+			if denseFrom < g.maxF {
+				// The band: a fill between the comb's lowest and highest level. The current one has
+				// crisp edges; the before-curve stays a faint wash behind it.
+				x0 := x(math.Max(denseFrom, g.minF))
+				top, bottom := y(c.EnvHi), y(c.EnvLo)
+				fill := withAlpha(primary, 0x70)
+				if before {
+					fill = withAlpha(muted, 0x0e)
 				}
-				if i == 0 {
-					continue
-				}
-				x1, y1, x2, y2 := cols[i-1].x, cols[i-1].last, cl.x, cl.first
+				band := canvas.NewRectangle(fill)
+				band.Move(fyne.NewPos(x0, top))
+				band.Resize(fyne.NewSize(w-x0, float32(math.Max(float64(bottom-top), 1))))
+				bands = append(bands, band)
 				if !before {
-					line(x1, y1, x2, y2, col, width)
-					continue
-				}
-				// Dashed: split the segment where the pattern switches between dash and gap
-				seg := float32(math.Hypot(float64(x2-x1), float64(y2-y1)))
-				for done := float32(0); done < seg; {
-					phase := float32(math.Mod(float64(travelled), graphDash+graphGap))
-					step := float32(graphDash) - phase
-					on := phase < graphDash
-					if !on {
-						step = graphDash + graphGap - phase
+					for _, ey := range []float32{top, bottom} {
+						l := canvas.NewLine(primary)
+						l.StrokeWidth = 2
+						l.Position1, l.Position2 = fyne.NewPos(x0, ey), fyne.NewPos(w, ey)
+						bands = append(bands, l)
 					}
-					step = float32(math.Min(float64(step), float64(seg-done)))
-					if on {
-						t1, t2 := done/seg, (done+step)/seg
-						line(x1+(x2-x1)*t1, y1+(y2-y1)*t1, x1+(x2-x1)*t2, y1+(y2-y1)*t2, col, width)
-					}
-					done += step
-					travelled += step
 				}
 			}
 		}
 	}
+	r.mu.Lock()
+	r.lines, r.plotWidth = lines, w
+	r.mu.Unlock()
+	r.objects = append(r.objects, bands...)
+	r.raster.Move(fyne.NewPos(0, 0))
+	r.raster.Resize(fyne.NewSize(w, h))
+	r.objects = append(r.objects, r.raster)
 
 	// Cursor
 	if g.cursor >= g.minF && g.cursor <= g.maxF {
 		cx := x(g.cursor)
-		line(cx, 0, cx, h, fg, 1.5)
+		line(cx, 0, cx, h, withAlpha(fg, 0xd0), 1.5)
 		dot := canvas.NewCircle(fg)
-		dot.Move(fyne.NewPos(cx-4, y(g.cursorDB)-4))
-		dot.Resize(fyne.NewSize(8, 8))
+		dot.StrokeColor = th.Color(theme.ColorNameBackground, v)
+		dot.StrokeWidth = 1.5
+		dot.Move(fyne.NewPos(cx-4.5, y(g.cursorDB)-4.5))
+		dot.Resize(fyne.NewSize(9, 9))
 		r.objects = append(r.objects, dot)
 	}
 
@@ -243,7 +320,7 @@ func (r *responseGraphRenderer) build(size fyne.Size) {
 		case db < 0:
 			s = "−" + s
 		}
-		text(s, muted, 2, y(db)-r.labelSize()-2, false)
+		text(s, muted, 2, y(db)-r.labelSize()-2)
 	}
 	for i, f := range ticks {
 		s := strconv.FormatFloat(f, 'f', -1, 64)
@@ -253,6 +330,6 @@ func (r *responseGraphRenderer) build(size fyne.Size) {
 		if i == len(ticks)-1 {
 			s += " Hz"
 		}
-		text(s, muted, x(f)-6, h+2, false)
+		text(s, muted, x(f)-6, h+2)
 	}
 }

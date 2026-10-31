@@ -374,12 +374,13 @@ func NewTwoMicSumTab() fyne.CanvasObject {
 		m := logic.TwoMicSum{Delay: net, Gain: logic.DBToGain(levelDB), Inverted: polarity.Selected == "Inverted"}
 		gLo, gHi := logic.GraphRange(lo, hi)
 		curve := func(model logic.TwoMicSum, before bool) widgets.GraphCurve {
-			fs := logic.SampleFrequencies(gLo, gHi, 300, model)
+			fs := logic.SampleFrequencies(gLo, gHi, 600, model)
 			ls := make([]float64, len(fs))
 			for i, f := range fs {
 				ls[i] = model.LevelDB(f)
 			}
-			return widgets.GraphCurve{Freqs: fs, Levels: ls, Before: before}
+			return widgets.GraphCurve{Freqs: fs, Levels: ls, Before: before,
+				Spacing: model.CombSpacing(), EnvLo: model.DipDB(), EnvHi: model.PeakDB()}
 		}
 		curves := []widgets.GraphCurve{}
 		changed := delay != 0 || levelDB != 0 || m.Inverted

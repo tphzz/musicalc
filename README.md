@@ -1,6 +1,6 @@
 # MusiCalc
 
-A cross-platform music calculator application built with Go and Fyne. Provides real-time calculators for tempo, pitch, sampling, and time-stretching operations commonly used in music production and audio engineering. It runs on Windows, Linux and Android.
+A cross-platform music calculator built with Go and Fyne. It provides real-time calculators for timecode, tempo, pitch, sampling and multi-mic recording, the everyday maths of music production and audio engineering. It runs on Windows, Linux and Android.
 
 This project is heavily inspired by [MusicMath](https://dev.laurentcolson.com/musicmath.html), an excellent tool currently exclusive to the Apple ecosystem. This version aims to bring that same utility to Windows, Linux and Android, with a simpler look and feel. For macOS users looking for a polished commercial solution, MusicMath is highly recommended. MusicMath has long been a reference tool for music-related calculations, and this project draws inspiration from that work.
 
@@ -22,102 +22,98 @@ This project is heavily inspired by [MusicMath](https://dev.laurentcolson.com/mu
 
 This application is provided for informational purposes only and is not guaranteed to be accurate. Calculations may contain errors due to software bugs, rounding, or floating-point limitations. Use this software entirely at your own risk; the author assumes no responsibility for any financial loss, data loss, or damages resulting from its use. Always manually verify critical results.
 
+## Calculators at a Glance
+
+| Category | Calculator | What it answers |
+|---|---|---|
+| Time & Tempo | ⏱️ Timecode | Add and subtract timecodes; convert between frame rates |
+| | 🎵 Tempo to Delay | Delay times and modulation rates for every note value at a tempo |
+| | 🎚️ Tempo Change | How a tempo change affects pitch and length, and the other way round |
+| | 👆 Tap Tempo | The tempo of a song, tapped along with the beat |
+| Frequency & Pitch | 🎹 Note to Frequency | The frequency of every note, in 46 tunings |
+| | 🎼 Frequency to Note | The closest note to a frequency, and how far off it is |
+| Analysis | 📐 Sample Length | Samples, milliseconds and tempo of a loop, from any one of them |
+| Multi-Mic | 🎙️ Alignment Delay | The delay that lines each close mic up with a reference mic |
+| | 〰️ Two-Mic Sum | What mixing two mics on one source does to the combined sound |
+| | 📏 3:1 Rule | Whether a source spills too strongly into a neighbouring mic |
+
 ## Features
 
-### ⏱️ Timecode Calculator
-- Support for multiple frame rates: 23.976, 24, 25, 29.94, 29.97, 29.97 drop frame, 30, 50, 59.94, 60 fps
-- Precise NTSC frame rate handling with exact fractional values
-- Dual timecode input fields with real-time calculation
-- Add and subtract timecode operations
-- Frame count preservation when switching frame rates (H:M:S:F notation stays constant)
-- Compact display format showing timecode, frame count, and FPS
-- Calculation history of the last 100 operations (selectable and copyable on desktop)
-- Essential for video editing, post-production, and audio-for-video work
+### Time & Tempo
 
-### 🎵 Tempo to Delay Calculator
-- Calculate delay times (ms) and modulation frequencies (Hz) for various note divisions
-- One card per note value, from whole notes to 1/64 notes, with the straight, dotted and triplet values side by side
-- Real-time BPM input with instant recalculation
-- Built-in tap pad: tap along with the beat and the tempo field and all cards follow live (desktop: press T)
-- Perfect for setting up delay effects, LFOs, and rhythmic modulation
+#### ⏱️ Timecode
+- Frame rates 23.976, 24, 25, 29.94, 29.97, 29.97 drop frame, 30, 50, 59.94 and 60 fps, with exact NTSC fractions
+- Two timecode fields with right-to-left digit entry and a `.` shorthand for `00`
+- Add and subtract; the result moves to the first field for the next step
+- Switching the frame rate keeps the H:M:S:F notation and recalculates the frame count
+- History of the last 100 operations (selectable and copyable on desktop)
 
-### 👆 Tap Tempo
-- Find the tempo of a song by tapping along with the beat on a large tap area
-- Averages the last 8 taps; pausing for 2 seconds starts a new measurement
-- Shows the tempo, the number of taps, how steady the taps were (± BPM) and the quarter-note length
-- Round switches between two decimals and whole BPM
-- Delay sends the measured tempo straight to the Tempo to Delay calculator
-- Desktop: click, or press Space or T to tap; Esc resets
+#### 🎵 Tempo to Delay
+- Delay times (ms) and modulation rates (Hz) for note values from 1/1 to 1/64
+- One card per note value with straight, dotted and triplet values side by side
+- Built-in tap pad: tap along with the beat and every value follows live (desktop: press **T**)
 
-### 🎹 Note to Frequency Calculator
-- Complete MIDI note range: C-2 to B8 (MIDI 0-131)
-- Custom reference tuning support (default A3 = 440 Hz)
-- 46 bundled tunings (Scala scales), organized into Equal, Just, Historic and World submenus
-- Displays frequencies and cent deviations for all chromatic notes
-- Highlights the reference note and opens scrolled to it
-- Dual MIDI convention display (C4=60 standard / C3=60 alternative)
-- Real-time frequency calculation with adjustable reference pitch
-- Ideal for tuning synthesizers, creating custom scales, and frequency analysis
+#### 🎚️ Tempo Change
+- Works in every direction: enter a new tempo, a time-stretch percentage, or a transposition in semitones and cents
+- Shows the pitch shift in 100-cent and 50-cent notation, the time stretch and the tempo change in percent
+- Limits results to the valid tempo range (5–1000 BPM); swap and reset buttons
 
-### 🎼 Frequency to Note Calculator
-- Convert any frequency to the closest musical note
-- Dual notation display: 100-cent and 50-cent systems
-- Shows pitch deviation in cents for fine-tuning accuracy
-- Quick-select buttons for common reference frequencies
-- Adjustable middle C convention (C3/C4)
-- Custom reference tuning support (default A4 = 440 Hz)
-- Perfect for analyzing recordings, tuning acoustic instruments, and spectrum analysis
+#### 👆 Tap Tempo
+- Large tap area; the tempo is averaged over the last 8 taps, and a 2-second pause starts a new measurement
+- Shows the number of taps, how steady they were (± BPM) and the quarter-note length
+- **Round** switches between two decimals and whole BPM; **Delay** sends the tempo to Tempo to Delay
+- Desktop: click, or press **Space** or **T**; **Esc** resets
 
-### ⏱️ Sample Length Calculator
-- Bidirectional calculation: change any field and others update automatically
-- Calculate sample count from tempo, beats, and sample rate
-- Calculate tempo from sample length and beats
-- Calculate duration (ms) from any combination of parameters
-- Support for multiple sample rates (8kHz to 192kHz)
-- Adjustable beat divisions for loop calculations
-- Essential for sampler programming and loop creation
+### Frequency & Pitch
 
-### 🎙️ Multi-Mic Alignment Delay
-- Calculate delay offsets to time-align multiple microphones to a single reference mic
-- Names the sound source all distances are measured from (e.g. Snare), so every number refers to the same thing
-- Setup card with labelled source, temperature (°C/°F), reference mic distance and sample rate, pre-filled with useful defaults (Snare, 20 °C, 3 m, 48 kHz); it folds into a one-line summary such as "Snare · ref 3 m · 20 °C · 48 kHz" to leave room for the mics
-- One distance unit (m/ft) for the reference, the microphones and the results
-- Switching a unit converts the values (4 m → 13.12 ft, 22 °C → 71.6 °F), so the setup and all delays stay the same
-- Per-mic delay to add, in milliseconds and samples (based on project sample rate)
-- One compact card per microphone (name, distance, delay, samples); all delays update automatically when any input changes
-- Mic names can be typed freely or picked from grouped presets (Drums, Overheads & Room, Instruments & Vocals)
-- The mic at the reference distance is marked as the reference; a mic farther than the reference shows how much earlier it would have to be moved (e.g. −1.46 ms, 70 samples earlier)
-- Warns when a stereo pair (e.g. Overhead L / Overhead R) gets different delays, which would shift the stereo image
-- The last setup is restored when the app starts
-- Presets for standard studio setups in the ⋮ menu: save, save as, load, rename and delete; import and export as a JSON file through the platform's own file dialog (Windows, macOS, Linux desktop portal, Android and iOS system picker)
+#### 🎹 Note to Frequency
+- Frequencies and cent deviations for every note from C-2 to B8, with MIDI numbers in both conventions (C3 = 60 and C4 = 60)
+- Adjustable reference note and pitch (default A3 = 440 Hz in the C3 convention)
+- 46 bundled tunings (Scala scales), grouped into Equal, Just, Historic and World submenus
+- Opens scrolled to the highlighted reference note
 
-### 〰️ Two-Mic Sum
-- Shows what mixing two mics on the same source does to the combined sound, e.g. a kick drum's close mic and a room mic
-- Main result: how much later (or earlier) Mic B arrives, in milliseconds and samples; enter the extra distance (m/ft) or a measured time (ms)
-- Mic B's level (dB) and polarity, and a delay on Mic A; **Align** fills in the delay that lines up the direct sound, **Reset** takes it away
-- Frequency-response graph of the combined level, in dB relative to Mic A alone, with the range of interest shaded and a cursor at one frequency; the graph follows the range of interest, and a dashed line shows the response before your changes
-- Lists the predicted cancellation (dips) and reinforcement (peaks) frequencies and how deep they go
-- Source presets pick a typical range of interest (Drums, Bass, Guitars, Vocals, e.g. Kick 50–100 Hz, Cymbals 3–12 kHz); temperature (°C/°F), units and sample rate sit in a Setup card that folds into one line; the setup is kept between sessions
-- States its model: the same signal reaching both mics, with a delay, level and polarity; room reflections and the mics' own response are not included, so check the mics summed in mono
+#### 🎼 Frequency to Note
+- The closest note to any frequency and its deviation in cents, in 100-cent and 50-cent notation (reference A4 = 440 Hz)
+- Middle C convention C3 or C4; quick-select buttons for C3, A3, C4 and A4
+- Desktop: plays a 3-second test tone at the entered frequency
 
-### 📏 3:1 Rule
-- Checks one source reaching two mics: its own mic and a neighbouring mic
-- Setup card with the source, both distances, how much louder the neighbouring channel is (gain, sensitivity, pickup), the target (3:1 / 9.5 dB, 10 dB, 15 dB) and units; it folds into one line such as "Singer A 1 / 3 m · +6 dB · ≥ 10 dB"
-- Separate results: the distance check (meets 3:1, at the threshold, below) and the estimated spill of the source in the neighbouring mic, against the target
-- Concrete fixes: how many dB to turn the neighbouring channel down, or how far to move the neighbouring mic; or how much room there is to spare
-- Comb-filter range stated as a condition (otherwise identical signals), including when full cancellation is possible
-- Distances in m or ft; switching converts the values; the setup is kept between sessions
+### Analysis
 
-### 🎚️ Tempo Change Calculator
-- Calculate pitch changes from tempo adjustments
-- Time stretching percentage calculations
-- Transpose semitones and cents (standard 100-cent notation)
-- 50-cent notation display for granular pitch control
-- Tempo delta percentage calculation
-- Dynamic clamping to valid tempo range (5-1000 BPM)
-- Bidirectional: adjust tempo, time stretch, or transpose values
-- Swap tempo values with one click
-- Perfect for time-stretching audio, pitch correction, and sampler tuning
+#### 📐 Sample Length
+- Change any field and the others follow: tempo, length in samples, length in ms
+- Sample rates from 8 kHz to 192 kHz, or any rate you type; adjustable number of beats
+
+### Multi-Mic
+
+All three Multi-Mic calculators keep their settings in a **Setup card** that folds into a one-line summary, so the results get the screen, and restore the last setup when the app starts. Distances can be entered in metres or feet and temperatures in °C or °F; switching converts the values, so the physical setup stays the same.
+
+#### 🎙️ Alignment Delay
+- The delay each close mic needs to line up with the reference mic (usually a room mic), in ms and samples
+- All distances are measured from one named source (e.g. the snare), so every number refers to the same thing
+- One compact card per mic; mic names typed freely or picked from grouped positions
+- The mic at the reference distance is marked; a mic farther away shows how much earlier it would have to move (e.g. −1.46 ms, 70 samples earlier)
+- Warns when a stereo pair (e.g. Overhead L / R) gets different delays, which would shift the stereo image
+- **Presets** for standard studio setups (⋮ menu): save, save as, load, rename, delete, and import/export as a JSON file through the system's own file dialog (Windows, macOS, Linux desktop portal, Android and iOS file picker)
+
+#### 〰️ Two-Mic Sum
+- Main result: how much later Mic B arrives than Mic A, in ms and samples, from the extra distance or a measured time
+- Mic B's level and polarity, and a delay on Mic A; **Align** previews the delay that lines up the direct sound
+- Frequency-response graph of the combined level, in dB relative to Mic A alone, with the range of interest shaded and a cursor; the graph follows the range of interest and shows the response before your changes as a dashed line
+- Predicted cancellation (dips) and reinforcement (peaks) frequencies and their depth
+- Source presets pick a typical range of interest (e.g. Kick 50–100 Hz, Cymbals 3–12 kHz)
+- States its model and assumptions: the same signal reaching both mics, without room reflections; check the mics summed in mono
+
+#### 📏 3:1 Rule
+- Checks one source reaching its own mic and a neighbouring mic
+- Separate results: the distance check (meets 3:1, at the threshold, below) and the estimated spill into the neighbouring mic, including how much louder that channel is
+- Targets 3:1 (9.5 dB), 10 dB or 15 dB below
+- Concrete fixes: how many dB to turn the neighbouring channel down or how far to move the mic; or how much room there is to spare
+- Comb-filter range stated as a condition, including when full cancellation is possible
+
+### Across the App
+- Categories in the ☰ menu, calculators in the tab bar; each calculator keeps its values when you switch away and back
+- Phone layout on Android: icon-only tabs, numeric keyboards, and a tab bar that hides while the keyboard is open
+- Light and dark theme following the system
 
 ## Documentation
 
@@ -137,6 +133,4 @@ This application is provided for informational purposes only and is not guarante
 
 ## License
 
-MIT License - Copyright (c) 2026 B. Zeiss
-
-See [LICENSE](LICENSE) for details.
+MIT License - See [LICENSE](LICENSE) for details.

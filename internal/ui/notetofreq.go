@@ -153,7 +153,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 		}
 	})
 
-	// Table displaying all MIDI notes (C-2 to B8, MIDI 0-131)
+	// Table displaying all notes from C-2 to B8 (132 rows; MIDI note numbers only go to 127)
 	table = widget.NewTableWithHeaders(
 		func() (int, int) { return 132, 4 },
 		func() fyne.CanvasObject {
