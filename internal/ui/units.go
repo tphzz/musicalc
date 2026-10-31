@@ -52,6 +52,15 @@ func (in *unitInput) SetText(text string) {
 	in.Entry.SetText(text)
 }
 
+// setBase sets the stored value exactly and shows it in the current unit, without the
+// rounding that typing the shown text would cause; onChanged is not called
+func (in *unitInput) setBase(v float64) {
+	in.Base = v
+	in.converting = true
+	in.Entry.SetText(logic.FormatTrim(in.fromBase(v, in.unit), 2))
+	in.converting = false
+}
+
 // Empty reports whether nothing has been entered
 func (in *unitInput) Empty() bool {
 	return strings.TrimSpace(in.Entry.Text) == ""

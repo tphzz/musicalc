@@ -79,13 +79,17 @@ This application is provided for informational purposes only and is not guarante
 
 ### 🎙️ Multi-Mic Alignment Delay
 - Calculate delay offsets to time-align multiple microphones to a single reference mic
-- Setup card with labelled temperature (°C/°F), reference mic distance and sample rate, pre-filled with useful defaults (20 °C, 3 m, 48 kHz); it folds into a one-line summary to leave room for the mics
+- Names the sound source all distances are measured from (e.g. Snare), so every number refers to the same thing
+- Setup card with labelled source, temperature (°C/°F), reference mic distance and sample rate, pre-filled with useful defaults (Snare, 20 °C, 3 m, 48 kHz); it folds into a one-line summary such as "Snare · ref 3 m · 20 °C · 48 kHz" to leave room for the mics
 - One distance unit (m/ft) for the reference, the microphones and the results
 - Switching a unit converts the values (4 m → 13.12 ft, 22 °C → 71.6 °F), so the setup and all delays stay the same
-- Per-mic results in milliseconds and samples (based on project sample rate)
+- Per-mic delay to add, in milliseconds and samples (based on project sample rate)
 - One compact card per microphone (name, distance, delay, samples); all delays update automatically when any input changes
 - Mic names can be typed freely or picked from grouped presets (Drums, Overheads & Room, Instruments & Vocals)
-- If a target mic is further than the reference, the delay is shown as N/A
+- The mic at the reference distance is marked as the reference; a mic farther than the reference shows how much earlier it would have to be moved (e.g. −1.46 ms, 70 samples earlier)
+- Warns when a stereo pair (e.g. Overhead L / Overhead R) gets different delays, which would shift the stereo image
+- The last setup is restored when the app starts
+- Presets for standard studio setups in the ⋮ menu: save, save as, load, rename and delete; import and export as a JSON file through the platform's own file dialog (Windows, macOS, Linux desktop portal, Android and iOS system picker)
 
 ### 〰️ Phase-Safe Distance
 - Find the "sweet spots" and "death zones" for two mics on one source, e.g. a kick drum's 60 Hz fundamental

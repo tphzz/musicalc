@@ -29,8 +29,9 @@ type tabInfo struct {
 	build   func() fyne.CanvasObject
 }
 
-// createCompactHeader creates a compact header with: hamburger + "category / tab heading"
-func createCompactHeader(window fyne.Window, categories []CategoryInfo, switchCategory func(int), headerLabel *widget.Label) *fyne.Container {
+// createCompactHeader creates a compact header with: hamburger + "category / tab heading", and on
+// the right the overflow button (⋮) for tabs with extra actions
+func createCompactHeader(window fyne.Window, categories []CategoryInfo, switchCategory func(int), headerLabel *widget.Label, actionsButton fyne.CanvasObject) *fyne.Container {
 	menuButton := widgets.NewButtonWithIcon("", theme.MenuIcon(), func() {
 		showCategoryMenu(window, categories, switchCategory)
 	})
@@ -38,8 +39,19 @@ func createCompactHeader(window fyne.Window, categories []CategoryInfo, switchCa
 	// Truncate long "category / tab" headings instead of overflowing narrow phone screens
 	headerLabel.Truncation = fyne.TextTruncateEllipsis
 	// Spacers center the label vertically next to the (taller) menu button while it keeps the full width
-	return container.NewBorder(nil, nil, menuButton, nil,
+	return container.NewBorder(nil, nil, menuButton, actionsButton,
 		container.NewVBox(layout.NewSpacer(), headerLabel, layout.NewSpacer()))
+}
+
+// showTabMenu opens the shown tab's overflow menu under the button, right-aligned with it
+func showTabMenu(window fyne.Window, button fyne.CanvasObject, menu *fyne.Menu) {
+	if menu == nil {
+		return
+	}
+	popUp := widget.NewPopUpMenu(menu, window.Canvas())
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(button)
+	x := pos.X + button.Size().Width - popUp.MinSize().Width
+	popUp.ShowAtPosition(fyne.NewPos(fyne.Max(x, 0), pos.Y+button.Size().Height))
 }
 
 func main() {
@@ -90,6 +102,14 @@ func main() {
 	built := make([]fyne.CanvasObject, len(tabs))
 	shown := 0 // global index of the tab on screen
 
+	// Overflow button (⋮) for the shown tab's extra actions; hidden for tabs without any
+	var actionsButton *widgets.Button
+	actionsButton = widgets.NewButtonWithIcon("", theme.MoreVerticalIcon(), func() {
+		showTabMenu(window, actionsButton, ui.TabMenu(built[shown]))
+	})
+	actionsButton.Importance = widget.LowImportance
+	actionsButton.Hide()
+
 	// Tap Tempo's Delay button sends the tempo to Tempo to Delay (index 1 in Time & Tempo) and opens it
 	tabs[7].build = func() fyne.CanvasObject {
 		return ui.NewTapTempoTab(func() { tabBar.Select(1) })
@@ -105,6 +125,11 @@ func main() {
 		content.Objects = []fyne.CanvasObject{built[index]}
 		content.Refresh()
 		headerLabel.SetText(categories[currentCategoryIndex].Name + " / " + tabs[index].heading)
+		if ui.HasTabMenu(built[index]) {
+			actionsButton.Show()
+		} else {
+			actionsButton.Hide()
+		}
 	}
 
 	tabBar.OnSelected = func(i int) {
@@ -136,7 +161,7 @@ func main() {
 		myApp.Preferences().SetInt("lastCategory", index)
 	}
 
-	header := createCompactHeader(window, categories, switchCategory, headerLabel)
+	header := createCompactHeader(window, categories, switchCategory, headerLabel, actionsButton)
 	// Keys typed while no field has focus go to the shown tab (e.g. Space taps in Tap Tempo)
 	window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		ui.HandleTabKey(built[shown], ev)

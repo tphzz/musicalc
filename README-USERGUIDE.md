@@ -8,7 +8,7 @@
   - **Frequency & Pitch**: Note to Frequency, Frequency to Note
   - **Analysis**: Sample Length
   - **Multi-Mic**: Alignment Delay, Phase-Safe Distance, 3:1 Rule
-- The header shows where you are, e.g. `Time & Tempo / Tap Tempo`.
+- The header shows where you are, e.g. `Time & Tempo / Tap Tempo`. Calculators with extra actions, like the Alignment Delay presets, show a **⋮** button on the right of the header.
 - On Android the tab bar hides while the on-screen keyboard is open and comes back when it closes.
 - Each calculator keeps its values when you switch to another one and back.
 
@@ -150,35 +150,56 @@ The table opens scrolled to the reference note, which is highlighted. Every C is
 
 ## Multi-Mic Alignment Delay
 
-This calculator helps you time-align multiple microphones (close mics) to a single **reference** microphone (usually the furthest mic, e.g. a room mic). It computes how much delay to add to each close mic so that all transients arrive at the DAW at the same time.
+This calculator helps you time-align multiple microphones (close mics) to a single **reference** microphone (usually the farthest mic, e.g. a room mic). It computes how much delay to add to each close mic so that a sound arrives in all of them at the same time.
+
+**All distances are measured from one sound source**, e.g. the snare. A room mic is at a different distance from the snare than from the kick, so one calculation always aligns the arrivals of one source. Aligning a mic for that source also shifts everything else it picks up.
 
 1. **Check the Setup card**
-   - The card at the top holds the settings, each with its label: **Temperature**, **Reference mic** and **Sample rate**.
-   - It starts open with useful defaults: 20 °C (the usual reference temperature for the speed of sound), 3 m and 48000 Hz.
+   - The card at the top holds the settings, each with its label: **Source**, **Temperature**, **Reference mic** and **Sample rate**.
+   - The first time it starts open with useful defaults: Snare, 20 °C (the usual reference temperature for the speed of sound), 3 m and 48000 Hz.
+   - **Source**: the sound source all distances are measured from. Type a name, or tap the arrow to pick one from **Drums** or **Instruments**.
    - **Temperature**: the room temperature in **°C** or **°F**; it sets the speed of sound.
    - **Reference mic**: the distance of your farthest microphone from the source (the one you align everything to, usually a room mic), in **m** or **ft**. This is the distance unit for the whole calculator: the reference, new mics and the results.
    - **Sample rate**: your DAW/project sample rate (e.g. 44100, 48000, 96000).
-   - Once you add the first mic, the card folds into one line, e.g. **Setup 20 °C · ref 3 m · 48 kHz**. Tap it to open it again.
+   - Once you add the first mic, the card folds into one line, e.g. **Setup Snare · ref 3 m · 20 °C · 48 kHz**. Tap it to open it again.
 
 2. **Add close microphones**
    - Enter a mic name: type a custom one, or tap the arrow in the Name field to pick a common position from the **Drums**, **Overheads & Room** or **Instruments & Vocals** submenu.
-   - Enter its distance from the source in the calculator's unit (shown next to the field).
+   - Enter its distance from the source in the calculator's unit; the field says what it is measured from, e.g. "From snare".
    - Press **+** to add it. Without a name it is called "Mic 1", "Mic 2", and so on.
 
 3. **Read results**
-   - Each mic gets a compact card: its name and distance on the left, the required delay in **milliseconds (ms)** and **samples** on the right.
+   - The list is headed "Delay to add · estimate, check by ear": the values are calculated from the distances, so listen to the result. Sample counts are rounded.
+   - Each mic gets a compact card: its name and distance on the left, the delay to add in **milliseconds (ms)** and **samples** on the right.
+   - The mic **at the reference distance** shows **0 ms · reference**.
+   - A mic **farther than the reference** shows a negative value in amber, e.g. **−1.46 ms · 70 samples earlier**. A delay can't make it arrive earlier: move its track earlier by that amount in your DAW, or use that mic as the reference instead.
+   - When a **stereo pair** (e.g. Overhead L and Overhead R) gets different delays, an amber note shows the difference. Delaying the two sides separately changes the timing between them and shifts the stereo image; to keep the image, give both the same delay.
 
 4. **Remove microphones**
    - Tap the trash icon on a mic's card to remove it.
 
+The setup is kept when you close the app and is back the next time it starts.
+
 **Switching units** converts the values instead of re-interpreting them: with the reference at 4 m, switching to **ft** shows 13.12 ft, and a mic at 1 m shows 3.28 ft. Switching **°C** to **°F** turns 22 °C into 71.6 °F. Your setup, and therefore every delay, stays exactly the same.
 
-**Notes / edge cases**:
-- If a mic is **further than the reference**, the delay is shown as **N/A** because you cannot add a positive delay to make a further mic arrive earlier.
-- All values update automatically when you change temperature, units, sample rate, reference distance, or add/remove microphones.
+### Presets
 
-**Examples** (48 kHz):
-- Defaults (20 °C, reference 3 m): Kick In at 1 m needs 5.82 ms (280 samples), Kick Out at 1.5 m 4.37 ms (210 samples).
+For standard studio setups, store the setup as a preset. The **⋮** button at the top right opens the preset menu.
+
+- A preset stores the **source, reference distance, units, sample rate and mics**. It does not store the temperature, which changes from day to day; loading a preset keeps the temperature you set.
+- The setup card shows the loaded preset's name instead of "Setup", e.g. **Studio A kit**. An asterisk (**Studio A kit\***) means you changed something since loading it.
+- **Save "Studio A kit"**: overwrites the loaded preset with your changes. It is only available when there are changes.
+- **Save as…**: stores the setup under a new name. If the name already exists, you are asked whether to replace that preset.
+- **Load preset…**: lists the presets with their source, reference distance and number of mics; tap one to load it. The loaded preset is checked.
+- **Manage presets…**: rename (pencil) or delete (trash) presets. A name that already exists is refused; deleting asks first and can't be undone.
+- **Import presets…**: adds the presets from a MusiCalc preset file (.json). A preset whose name already exists is added as "Name (2)".
+- **Export presets…**: saves all presets to one file, suggested as `musicalc-presets.json`, e.g. to copy them to another computer or phone.
+
+Import and export use your system's own file dialog: the Windows Open/Save dialog, the macOS file panel, your Linux desktop's file chooser, or the Android/iOS file picker.
+
+**Examples** (48 kHz, distances from the snare, 20 °C, reference 3 m):
+- Snare Top at 0.1 m needs 8.44 ms (405 samples); Overhead L at 1.2 m 5.24 ms (252 samples); Overhead R at 1.4 m 4.66 ms (224 samples). The overheads differ by 0.58 ms, so the pair note appears.
+- Room L at 3 m is the reference (0 ms); Room R at 3.5 m arrives 1.46 ms (70 samples) later than the reference.
 - 22 °C, reference 4 m: Kick In at 1 m needs 8.7 ms (418 samples), Kick Out at 1.5 m 7.25 ms (348 samples).
 
 ## Phase-Safe Distance

@@ -6,15 +6,25 @@ import (
 	"strings"
 )
 
+// AlignmentMic is one microphone and the delay it needs to line up with the reference mic.
+// A mic farther from the source than the reference gets a negative delay: it would have to be
+// moved earlier, which a plain delay can't do.
 type AlignmentMic struct {
 	Name              string
 	DistanceMeters    float64
 	DelayMS           float64
 	DelaySamples      int
-	IsBeyondReference bool
+	IsBeyondReference bool // farther from the source than the reference; the delay is negative
+	IsReference       bool // at the reference distance; no delay needed
 }
 
+// referenceTolerance is how close (in metres) a mic must be to the reference distance to count as the reference
+const referenceTolerance = 1e-9
+
+// AlignmentDelayCalculator works out the delays that line close mics up with the reference mic.
+// All distances are measured from the same sound source, named in Source.
 type AlignmentDelayCalculator struct {
+	Source                  string
 	TemperatureC            float64
 	SampleRate              int
 	ReferenceDistanceMeters float64
@@ -61,24 +71,26 @@ func (c *AlignmentDelayCalculator) Recalculate() {
 		c.Mics[i].DelayMS = delayMS
 		c.Mics[i].DelaySamples = delaySamples
 		c.Mics[i].IsBeyondReference = beyond
+		c.Mics[i].IsReference = math.Abs(c.ReferenceDistanceMeters-c.Mics[i].DistanceMeters) <= referenceTolerance
 	}
 }
 
+// DelayForDistanceMeters returns the delay that lines a mic at targetMeters up with the reference,
+// in milliseconds and samples, and whether the mic is farther than the reference. For a farther
+// mic the delay is negative: it arrives that much later than the reference.
 func (c *AlignmentDelayCalculator) DelayForDistanceMeters(targetMeters float64) (float64, int, bool) {
 	distanceDiff := c.ReferenceDistanceMeters - targetMeters
-	if distanceDiff < 0 {
-		return 0, 0, true
-	}
+	beyond := distanceDiff < -referenceTolerance
 
 	speed := c.SpeedOfSoundMetersPerSecond()
 	if speed <= 0 {
-		return 0, 0, false
+		return 0, 0, beyond
 	}
 
 	delayMS := (distanceDiff / speed) * 1000
 	delaySamples := int(math.Round(delayMS * float64(c.SampleRate) / 1000))
 
-	return delayMS, delaySamples, false
+	return delayMS, delaySamples, beyond
 }
 
 func ToMeters(distance float64, unit string) float64 {
