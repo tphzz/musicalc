@@ -20,6 +20,38 @@ class CounterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             reserve(self.path, "com.musicalc", "0.9.1")
 
+
+    def test_automatic_new_version_and_state_use_apple_high_water_mark(self):
+        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=0), 1)
+        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=0), 2)
+        self.assertEqual(reserve(self.path, "io.example.app", "0.10.0", minimum=0), 1)
+        self.assertEqual(reserve(self.path, "io.example.app", "0.10.0", minimum=7), 8)
+        state = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(state, {"bundle": "io.example.app", "versions": {"0.9.0": 2, "0.10.0": 8}})
+
+    def test_automatic_existing_version_preserves_local_reservations(self):
+        reserve(self.path, "io.example.app", "0.9.0", 12)
+        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=3), 13)
+        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=18), 19)
+
+    def test_automatic_recovery_and_exhaustion_do_not_replace_good_state(self):
+        reserve(self.path, "io.example.app", "0.9.0", 12)
+        before = self.path.read_bytes()
+        for value in (True, -1, 10000, "12", 9999):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                reserve(self.path, "io.example.app", "0.9.0", minimum=value)
+            self.assertEqual(self.path.read_bytes(), before)
+        with self.assertRaises(ValueError):
+            reserve(self.path, "wrong.bundle", "0.9.0", minimum=0)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_automatic_allocation_rejects_corrupt_local_version(self):
+        self.path.write_text('{"bundle":"io.example.app","versions":{"0.9.0":"12"}}', encoding="utf-8")
+        before = self.path.read_bytes()
+        with self.assertRaises(ValueError):
+            reserve(self.path, "io.example.app", "0.9.0", minimum=0)
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_concurrent_reservations_are_unique_and_durable(self):
         reserve(self.path, "com.musicalc", "0.9.0", 0)
         with ThreadPoolExecutor(max_workers=4) as pool:

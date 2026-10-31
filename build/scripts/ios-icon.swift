@@ -26,7 +26,8 @@ guard let data = bitmap.representation(using: .png, properties: [:]) else {
 }
 let destination = URL(fileURLWithPath: CommandLine.arguments[2])
 try data.write(to: destination, options: .atomic)
-guard let verified = NSBitmapImageRep(contentsOf: destination),
+let saved = try Data(contentsOf: destination)
+guard let verified = NSBitmapImageRep(data: saved),
       verified.pixelsWide == 1024, verified.pixelsHigh == 1024,
       !verified.hasAlpha else {
     fatalError("iOS icon must be opaque and 1024 x 1024")

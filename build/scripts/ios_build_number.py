@@ -29,10 +29,14 @@ def locked(path):
                 fcntl.flock(stream, fcntl.LOCK_UN)
 
 
-def reserve(path, bundle, version, seed=None):
+def reserve(path, bundle, version, seed=None, *, minimum=None):
     path = Path(path)
     if not RELEASE_RE.fullmatch(version):
         raise ValueError("Marketing version must be MAJOR.MINOR.PATCH")
+    if minimum is not None and (type(minimum) is not int or not 0 <= minimum <= 9999):
+        raise ValueError("App Store Connect build number must be 0..9999")
+    if seed is not None and minimum is not None:
+        raise ValueError("Cannot combine manual seeding and automatic allocation")
     path.parent.mkdir(parents=True, exist_ok=True)
     with locked(path.with_suffix(".lock")):
         if path.exists():
@@ -50,12 +54,18 @@ def reserve(path, bundle, version, seed=None):
                     f"but the configured bundle is {bundle!r}. "
                     "Preserve this counter and reconcile the bundle ID before building"
                 )
-        elif seed is None:
+        elif seed is None and minimum is None:
             raise ValueError("Counter missing; seed explicitly from App Store Connect before building")
         else:
             state = {"bundle": bundle, "versions": {}}
         previous = state["versions"].get(version)
-        if seed is not None:
+        if minimum is not None:
+            if version in state["versions"] and (type(previous) is not int or not 0 <= previous <= 9999):
+                raise ValueError("Corrupt local reservation; restore a backup before building")
+            next_value = max(previous if previous is not None else 0, minimum) + 1
+            if next_value > 9999:
+                raise ValueError("Build numbers exhausted; select a new marketing version")
+        elif seed is not None:
             if type(seed) is not int or not 0 <= seed < 9999 or (previous is not None and seed < previous):
                 raise ValueError("Seed must be 0..9998 and cannot decrease a reservation")
             next_value = seed

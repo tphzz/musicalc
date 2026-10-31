@@ -7,28 +7,23 @@ App Store Connect uploads.
 
 ## Repository checkout for manual commands
 
-Run the commands in this guide in a macOS terminal, using the same account that
-runs the self-hosted runner. Relative paths such as `build/scripts/...` start at
-the **public MusiCalc repository root**.
+Automated builds use the scripts from the workflow's own
+`actions/checkout` of the selected branch or tag. A separate manual clone,
+branch switch or build-number seed command on the Mac is not required.
 
-If this account does not already have a checkout, create one in a directory of
-your choice, then enter it:
+Select the desired ref in GitHub Actions when starting the aggregate or iPhone
+workflow. Packaging reads that checkout's marketing version through
+[version.py](../scripts/version.py), and reads the bundle ID from the runner's
+configuration. The build-number helper contains no fixed product bundle ID.
 
-~~~bash
-git clone --branch 0.9.0 https://github.com/tphzz/musicalc.git
-cd musicalc
-~~~
+Only manual development/debugging commands such as `build/scripts/build-ios.py`
+need a terminal at a public MusiCalc checkout's root. Runner setup commands below
+use absolute home-directory paths and do not require a checkout.
 
-If a checkout already exists, enter its root and ensure it contains the
-`0.9.0` build scripts. The helpers are tracked in the repository:
-[ios_build_number.py](../scripts/ios_build_number.py) and its imported
-[version.py](../scripts/version.py) stay together in `build/scripts/`.
-
-The persistent runner files live separately under `$HOME/.config/musicalc-ios/`:
-`config.json`, the API key directory and `build-numbers.json`. The seed command
-below creates/updates that counter JSON through `--file`; it runs the Python
-helper directly from the repository. GitHub Actions checks out the build scripts
-automatically when a workflow runs.
+Persistent runner files live outside checkout under
+`$HOME/.config/musicalc-ios/`: configuration, API keys and the automatically
+managed build-number journal. GitHub Actions replaces source checkouts; it
+must retain that directory.
 
 ## Existing macOS signing
 
@@ -78,9 +73,9 @@ Apple references: [distribution methods](https://help.apple.com/xcode/mac/curren
 These are one-time account actions. Do them before the first iPhone workflow.
 
 1. Ensure Apple Developer Program membership and current agreements are active.
-2. In Certificates, Identifiers & Profiles, register an explicit App ID for
-   **com.musicalc** if available. If unavailable, choose a replacement before
-   creating certificates/profiles; use it consistently in the configuration below.
+2. In Certificates, Identifiers & Profiles, register an explicit App ID using
+   a reverse-DNS identifier you control. Use the registered identifier in the
+   configuration below and the matching distribution profile.
    This iOS identifier does not change the existing Android application ID.
 3. In App Store Connect → Apps → **+ → New App**, select iOS. Use app name
    **MusiCalc** if available, English as the primary language, the registered
@@ -119,13 +114,13 @@ nano "$HOME/.config/musicalc-ios/config.json"
 chmod 600 "$HOME/.config/musicalc-ios/config.json"
 ~~~
 
-Use the JSON below, replacing every example value. For packaging with upload
-disabled, `bundle_id`, `team_id`, `certificate` and `profile` are required.
-The app/API-key fields are required when enabling upload:
+Use the JSON below, replacing every example value. All fields are required for
+both build-only and upload runs. App Store Connect read access is used to assign
+build numbers even when uploading is disabled:
 
 ~~~json
 {
-  "bundle_id": "com.musicalc",
+  "bundle_id": "io.example.musicalc",
   "team_id": "ABCDEFGHIJ",
   "certificate": "Apple Distribution: Your Team Name (ABCDEFGHIJ)",
   "profile": "MusiCalc App Store",
@@ -138,7 +133,8 @@ The app/API-key fields are required when enabling upload:
 
 Store `AuthKey_<KEY_ID>.p8` in the configured key directory, owned by the runner
 and mode 600. Restrict the configuration/key directories to mode 700. The API
-key is used only when upload is enabled. For accounts with multiple providers,
+key authorizes read-only app/build queries for every build and upload when
+enabled. No API token or key content is written to logs. For accounts with multiple providers,
 also set `asc_public_id` to the selected provider's public ID as reported by
 `xcrun altool --list-providers`.
 
@@ -146,42 +142,51 @@ The iPhone job uses the existing signing-keychain password file to unlock the
 installed Apple Distribution private key. No new GitHub credential secret names
 are required.
 
-## Seed and preserve build numbers
+## Automatic build numbers
 
-From that repository root, as the runner account, explicitly seed a brand-new
-app/version at zero:
+Every iPhone run automatically:
 
-~~~bash
-python3 build/scripts/ios_build_number.py \
-  --file "$HOME/.config/musicalc-ios/build-numbers.json" \
-  --bundle com.musicalc --version 0.9.0 --seed 0
-~~~
+1. Takes the marketing version from the selected Git ref and the bundle ID from
+   `config.json`.
+2. Verifies that the configured numeric App Store Connect app ID belongs to that
+   bundle, then reads all pages of iOS builds for that marketing version.
+3. Reserves `max(highest Apple build, highest local reservation) + 1` under the
+   local file lock, persisting the number before packaging.
 
-Seeding at zero records the starting point; the first workflow build reserves
-number **1**. For example, seeding an existing version at 12 makes its next
-reservation **13**.
+The first successful lookup for an unused version returns zero, so its first
+build reserves **1**. A new marketing version and a missing journal are
+initialized automatically from Apple's records. There is no per-version seed
+command, separate clone or manually edited version list.
 
-The `--bundle` value must exactly match `bundle_id` in the runner's
-`config.json`. Replace the example bundle consistently in both setup commands
-and configuration. The counter stores that identity in its `bundle` field;
-an identity mismatch is rejected before reserving a number. Preserve the counter
-and its version high-water marks when reconciling an incorrect setup value.
-For a counter belonging to a different app, keep it separately and initialize
-the intended app's counter using reconciled App Store Connect/reservation values.
+`build-numbers.json` is generated runtime bookkeeping, not source configuration.
+It remembers numbers consumed by failed or unuploaded builds, which Apple
+cannot know about. Aggregate runs, standalone runs and retries share it; a failed
+packaging run does not return its reservation. Keep the complete iPhone job
+serialized through its non-cancelling host group. All producers for this app
+must share the same reservation journal/host lane.
 
-For an existing version, use the highest number already present in App Store
-Connect, or any higher locally reserved number, instead of zero. Seed each new
-marketing version explicitly. Back up the counter along with the runner setup.
-If state is lost, reconcile with App Store Connect before building again.
+The API key and app access must work even when **Upload to App Store Connect**
+is disabled. Authentication, network, app/bundle mismatch, malformed responses
+and exhausted counters stop the build rather than assuming zero. Existing
+bundle mismatches or corrupt local state are not silently rewritten.
 
-Aggregate runs, platform runs and retries reserve from this same locked counter.
-A reservation is persisted before packaging and is never rolled back. Gaps after
-failures are intentional. Values are 1–9999; exhaustion fails rather than wraps.
-Keep the whole iPhone job serialized and non-cancelling through its host group.
+Back up the journal with the runner setup. If it is lost, restore the newest
+backup and reconcile any higher locally reserved numbers before restarting
+jobs: Apple can recover uploaded history, but cannot recover unpublished local
+reservations. The helper's explicit `--seed` option remains a recovery tool for
+a reconciled high-water mark; normal builds never need it. Build values are
+**1–9999** for each marketing version; exhaustion fails instead of wrapping.
+
+For example, a reservation of 1 followed by an icon/packaging failure remains
+consumed; the next packaging attempt reserves at least 2. The workflow's native
+helper tests and actual icon preflight now run before reserving a number.
+
+Apple API references: [list builds](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds),
+[team JWT authentication](https://developer.apple.com/documentation/appstoreconnectapi/generating-tokens-for-api-requests).
 
 ## First internal TestFlight run
 
-1. Manually run **16 Build - iPhone** against branch `0.9.0` with upload disabled.
+1. Manually run **16 Build - iPhone** against the desired branch or tag with upload disabled.
    Verify the signed IPA artifact, bundle ID, version/build and workflow summary.
 2. Run again with **Upload to App Store Connect** enabled. This reserves a fresh
    number, validates the IPA, and uploads it using `altool --upload-package`.
