@@ -82,8 +82,8 @@ func (c *presetController) title() string {
 	return c.presets[i].Name
 }
 
-// menu builds the overflow menu
-func (c *presetController) menu(win fyne.Window) *fyne.Menu {
+// menuItems builds the preset entries of the overflow menu
+func (c *presetController) menuItems(win fyne.Window) []*fyne.MenuItem {
 	empty := len(c.presets) == 0
 	save := fyne.NewMenuItem("Save", c.saveLoaded)
 	if i := c.loadedIndex(); i >= 0 {
@@ -96,7 +96,7 @@ func (c *presetController) menu(win fyne.Window) *fyne.Menu {
 	manage.Disabled = empty
 	export := fyne.NewMenuItem("Export presets…", func() { c.exportPresets(win) })
 	export.Disabled = empty
-	return fyne.NewMenu("",
+	return []*fyne.MenuItem{
 		save,
 		fyne.NewMenuItem("Save as…", func() { c.showSaveAs(win) }),
 		load,
@@ -104,7 +104,7 @@ func (c *presetController) menu(win fyne.Window) *fyne.Menu {
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Import presets…", func() { c.importPresets(win) }),
 		export,
-	)
+	}
 }
 
 // saveLoaded overwrites the loaded preset with the setup on screen

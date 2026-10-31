@@ -112,12 +112,22 @@ All three Multi-Mic calculators keep their settings in a **Setup card** that fol
 
 ### Across the App
 - Categories in the ☰ menu, calculators in the tab bar; each calculator keeps its values when you switch away and back
+- Built-in help for every calculator in its ⋮ menu (desktop: **F1**, **Esc** closes): what it does, how it works, how to use it in a session, with examples and illustrations; the same pages are linked under [Help](#help) below
 - Phone layout on Android: icon-only tabs, numeric keyboards, and a tab bar that hides while the keyboard is open
 - Light and dark theme following the system
 
+## Help
+
+The same pages as the app's built-in help: what each calculator does, how it works, and how to use it in practice.
+
+- [Getting Around](internal/ui/help/getting-around.md): navigation, menus and keys
+- **Time & Tempo:** [Timecode](internal/ui/help/timecode.md) · [Tempo to Delay](internal/ui/help/tempo-to-delay.md) · [Tempo Change](internal/ui/help/tempo-change.md) · [Tap Tempo](internal/ui/help/tap-tempo.md)
+- **Frequency & Pitch:** [Note to Frequency](internal/ui/help/note-to-frequency.md) · [Frequency to Note](internal/ui/help/frequency-to-note.md)
+- **Analysis:** [Sample Length](internal/ui/help/sample-length.md)
+- **Multi-Mic:** [Alignment Delay](internal/ui/help/alignment-delay.md) · [Two-Mic Sum](internal/ui/help/two-mic-sum.md) · [3:1 Rule](internal/ui/help/three-to-one.md)
+
 ## Documentation
 
-- **[User Guide](README-USERGUIDE.md)** - How to use each calculator
 - **[Ideas](IDEAS.md)** - Calculators that might be added in the future
 - **[Build Instructions](build/docs/README-BUILD.md)** - How to build from source on Windows, Linux and for Android
 - **[Creating Installers](build/docs/README-INSTALLER.md)** - Creating Windows installers and Linux packages

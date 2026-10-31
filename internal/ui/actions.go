@@ -2,26 +2,20 @@ package ui
 
 import "fyne.io/fyne/v2"
 
-// Tabs can offer extra actions in an overflow menu (⋮) on the right of the header, like the
-// Alignment Delay presets. main.go shows the button only for tabs that registered a menu.
-var tabMenus = map[fyne.CanvasObject]func() *fyne.Menu{}
+// Every tab has an overflow menu (⋮) on the right of the header. Tabs can add their own actions
+// to it, like the Alignment Delay presets; main.go adds Help as the last entry for every tab.
+var tabMenus = map[fyne.CanvasObject]func() []*fyne.MenuItem{}
 
-// setTabMenu registers the overflow menu of a tab's content. The menu is built each time it
-// opens, so enabled and disabled items are always current.
-func setTabMenu(tab fyne.CanvasObject, menu func() *fyne.Menu) {
-	tabMenus[tab] = menu
+// setTabMenu registers a tab's own menu items. They are built each time the menu opens, so
+// enabled and disabled items are always current.
+func setTabMenu(tab fyne.CanvasObject, items func() []*fyne.MenuItem) {
+	tabMenus[tab] = items
 }
 
-// HasTabMenu reports whether the tab has an overflow menu
-func HasTabMenu(tab fyne.CanvasObject) bool {
-	_, ok := tabMenus[tab]
-	return ok
-}
-
-// TabMenu builds the tab's overflow menu, or returns nil when it has none
-func TabMenu(tab fyne.CanvasObject) *fyne.Menu {
-	if menu, ok := tabMenus[tab]; ok {
-		return menu()
+// TabMenuItems returns the tab's own menu items, or none
+func TabMenuItems(tab fyne.CanvasObject) []*fyne.MenuItem {
+	if items, ok := tabMenus[tab]; ok {
+		return items()
 	}
 	return nil
 }

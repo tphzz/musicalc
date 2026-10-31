@@ -322,7 +322,11 @@ func (r *responseGraphRenderer) build(size fyne.Size) {
 		}
 		text(s, muted, 2, y(db)-r.labelSize()-2)
 	}
-	for i, f := range ticks {
+	// Frequency labels, placed from the right so the last one, with the unit, always shows;
+	// a label that would run into its right-hand neighbour is skipped
+	nextStart := float32(math.Inf(1))
+	for i := len(ticks) - 1; i >= 0; i-- {
+		f := ticks[i]
 		s := strconv.FormatFloat(f, 'f', -1, 64)
 		if f >= 1000 {
 			s = strconv.FormatFloat(f/1000, 'f', -1, 64) + "k"
@@ -330,6 +334,14 @@ func (r *responseGraphRenderer) build(size fyne.Size) {
 		if i == len(ticks)-1 {
 			s += " Hz"
 		}
-		text(s, muted, x(f)-6, h+2)
+		probe := canvas.NewText(s, muted)
+		probe.TextSize = r.labelSize()
+		tw := probe.MinSize().Width
+		px := float32(math.Max(0, math.Min(float64(x(f)-6), float64(w-tw))))
+		if px+tw > nextStart-6 {
+			continue
+		}
+		text(s, muted, px, h+2)
+		nextStart = px
 	}
 }

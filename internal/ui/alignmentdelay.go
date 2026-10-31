@@ -350,12 +350,12 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		nil, nil, nil,
 		container.NewVScroll(container.New(layout.NewCustomPaddedLayout(2, 4, 2, 2), micList)),
 	)
-	setTabMenu(content, func() *fyne.Menu {
+	setTabMenu(content, func() []*fyne.MenuItem {
 		windows := fyne.CurrentApp().Driver().AllWindows()
 		if len(windows) == 0 {
 			return nil
 		}
-		return presets.menu(windows[0])
+		return presets.menuItems(windows[0])
 	})
 	return content
 }

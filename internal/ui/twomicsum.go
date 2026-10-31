@@ -392,14 +392,22 @@ func NewTwoMicSumTab() fyne.CanvasObject {
 
 		reading := ""
 		if cursor > 0 {
-			reading = fmt.Sprintf("At %s Hz: %s dB", logic.FormatTrim(cursor, 2), signedDB(m.LevelDB(cursor)))
+			if l := m.LevelDB(cursor); l <= -60 {
+				reading = fmt.Sprintf("At %s Hz: complete cancellation", logic.FormatTrim(cursor, 2))
+			} else {
+				reading = fmt.Sprintf("At %s Hz: %s dB", logic.FormatTrim(cursor, 2), signedDB(l))
+			}
 		}
 		if lo > 0 && hi > lo {
 			lowDB, highDB := m.RangeDB(lo, hi)
 			band := rangeText + ": "
-			if highDB-lowDB < 0.05 {
+			switch {
+			case highDB-lowDB < 0.05:
 				band += signedDB(highDB) + " dB throughout"
-			} else {
+			case lowDB <= -60:
+				// The model's floor stands for complete cancellation, not a level to read
+				band += "complete cancellation to " + signedDB(highDB) + " dB"
+			default:
 				band += signedDB(lowDB) + " to " + signedDB(highDB) + " dB"
 			}
 			if reading != "" {
