@@ -68,6 +68,8 @@ func main() {
 		{"Sample Len", "Sample Length", ui.ResourceSamplelengthSvg, ui.NewSampleLengthTab},
 		{"Align Dly", "Alignment Delay", ui.ResourceAlignmentdelaySvg, ui.NewAlignmentDelayTab},
 		{"Tap", "Tap Tempo", ui.ResourceTaptempoSvg, nil}, // built below: it needs the tab bar
+		{"Phase", "Phase-Safe Distance", ui.ResourcePhaseSvg, ui.NewPhaseDistanceTab},
+		{"3:1", "3:1 Rule", ui.ResourceThreetooneSvg, ui.NewThreeToOneTab},
 	}
 	// Mobile shows icons only (larger, in fixed-width tabs)
 	isMobile := fyne.CurrentDevice().IsMobile()
@@ -76,7 +78,7 @@ func main() {
 		{Name: "Time & Tempo", TabIndices: []int{0, 1, 2, 7}},
 		{Name: "Frequency & Pitch", TabIndices: []int{3, 4}},
 		{Name: "Analysis", TabIndices: []int{5}},
-		{Name: "Multi-Mic", TabIndices: []int{6}},
+		{Name: "Multi-Mic", TabIndices: []int{6, 8, 9}},
 	}
 
 	// Always start with Time & Tempo category (Timecode Calculator)

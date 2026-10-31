@@ -4,6 +4,10 @@
 
 - The **menu button** (☰) at the top left switches between the categories: **Time & Tempo**, **Frequency & Pitch**, **Analysis** and **Multi-Mic**.
 - The **tab bar** at the bottom switches between the calculators of the current category. On Android the tabs show icons only.
+  - **Time & Tempo**: Timecode, Tempo to Delay, Tempo Change, Tap Tempo
+  - **Frequency & Pitch**: Note to Frequency, Frequency to Note
+  - **Analysis**: Sample Length
+  - **Multi-Mic**: Alignment Delay, Phase-Safe Distance, 3:1 Rule
 - The header shows where you are, e.g. `Time & Tempo / Tap Tempo`.
 - On Android the tab bar hides while the on-screen keyboard is open and comes back when it closes.
 - Each calculator keeps its values when you switch to another one and back.
@@ -148,34 +152,67 @@ The table opens scrolled to the reference note, which is highlighted. Every C is
 
 This calculator helps you time-align multiple microphones (close mics) to a single **reference** microphone (usually the furthest mic, e.g. a room mic). It computes how much delay to add to each close mic so that all transients arrive at the DAW at the same time.
 
-1. **Set sample rate**
-   - Choose your DAW/project sample rate (e.g. 44100, 48000, 96000).
+1. **Check the Setup card**
+   - The card at the top holds the settings, each with its label: **Temperature**, **Reference mic** and **Sample rate**.
+   - It starts open with useful defaults: 20 °C (the usual reference temperature for the speed of sound), 3 m and 48000 Hz.
+   - **Temperature**: the room temperature in **°C** or **°F**; it sets the speed of sound.
+   - **Reference mic**: the distance of your farthest microphone from the source (the one you align everything to, usually a room mic), in **m** or **ft**. This is the distance unit for the whole calculator: the reference, new mics and the results.
+   - **Sample rate**: your DAW/project sample rate (e.g. 44100, 48000, 96000).
+   - Once you add the first mic, the card folds into one line, e.g. **Setup 20 °C · ref 3 m · 48 kHz**. Tap it to open it again.
 
-2. **Set temperature**
-   - Enter the room temperature and select **C** or **F**.
-   - This is used to estimate speed of sound.
-
-3. **Set the reference distance**
-   - Enter the distance to your furthest microphone (the one you align everything to).
-   - Choose **m** or **ft**.
-
-4. **Add target microphones**
+2. **Add close microphones**
    - Enter a mic name: type a custom one, or tap the arrow in the Name field to pick a common position from the **Drums**, **Overheads & Room** or **Instruments & Vocals** submenu.
-   - Enter its distance.
-   - Choose **m** or **ft**.
+   - Enter its distance from the source in the calculator's unit (shown next to the field).
    - Press **+** to add it. Without a name it is called "Mic 1", "Mic 2", and so on.
 
-5. **Read results**
-   - Each mic gets its own card with its name and distance, plus the required delay in:
-     - **milliseconds (ms)**
-     - **samples**
+3. **Read results**
+   - Each mic gets a compact card: its name and distance on the left, the required delay in **milliseconds (ms)** and **samples** on the right.
 
-6. **Remove microphones**
+4. **Remove microphones**
    - Tap the trash icon on a mic's card to remove it.
+
+**Switching units** converts the values instead of re-interpreting them: with the reference at 4 m, switching to **ft** shows 13.12 ft, and a mic at 1 m shows 3.28 ft. Switching **°C** to **°F** turns 22 °C into 71.6 °F. Your setup, and therefore every delay, stays exactly the same.
 
 **Notes / edge cases**:
 - If a mic is **further than the reference**, the delay is shown as **N/A** because you cannot add a positive delay to make a further mic arrive earlier.
 - All values update automatically when you change temperature, units, sample rate, reference distance, or add/remove microphones.
+
+**Examples** (48 kHz):
+- Defaults (20 °C, reference 3 m): Kick In at 1 m needs 5.82 ms (280 samples), Kick Out at 1.5 m 4.37 ms (210 samples).
+- 22 °C, reference 4 m: Kick In at 1 m needs 8.7 ms (418 samples), Kick Out at 1.5 m 7.25 ms (348 samples).
+
+## Phase-Safe Distance
+
+When two mics pick up the same source at different distances, the farther mic hears it later. For a given frequency this delay is a phase offset: at some distances the two mics reinforce each other (**sweet spots**), at others that frequency cancels out (**death zones**). This calculator maps those distances, e.g. for a kick drum's 60 Hz fundamental.
+
+1. **Set the frequency** in Hz, or pick a typical fundamental from **Source** (Drums, Bass, Guitars, Vocals). Typing another frequency shows "Custom".
+2. **Set the temperature** (°C/°F) and the distance **Units** (m/ft). Switching converts the values.
+3. **Read the wavelength**: e.g. 5.74 m at 60 Hz and 22 °C, with half a wavelength and the speed of sound used.
+4. **Enter the path difference**: how much farther one mic is from the source than the other.
+   - The card turns **green** (sweet spot, under 60°), **amber** (partial cancellation, 60–120°) or **red** (death zone, over 120°).
+   - It shows the phase offset and how much the frequency drops when both mics are summed.
+5. **Use the zone map**: it covers two wavelengths, shows green, amber and red ranges, and marks your path difference.
+6. **Read the zone list**: the exact in-phase distances (0, λ, 2λ) and opposed distances (½ λ, 1½ λ), and how far you may be from a sweet spot (±⅙ λ, ±60°).
+
+**Examples** (60 Hz, 22 °C, λ = 5.74 m):
+- Path difference 0.8 m → 50°, sweet spot, −0.9 dB when summed.
+- Path difference 2.6 m → 163°, death zone, −16.6 dB when summed: move a mic or flip its polarity.
+
+## 3:1 Rule
+
+The 3:1 rule says: another source should be at least **three times farther** from a mic than the mic's own source. Its bleed then arrives at least 9.5 dB quieter, which keeps comb filtering shallow when the mics are mixed.
+
+1. **Enter the distance from the mic to its own source** and **to the other source**.
+2. **Choose the Units** (m/ft). Switching converts both values.
+3. **Read the result**:
+   - The **distance ratio** (e.g. 4.0 : 1), green when the rule is met and red when it isn't.
+   - How much quieter (or louder) the other source arrives at this mic, in dB.
+   - **Margin**: how close the other source may come, and how far the mic may move from its own source, while still meeting the rule.
+   - **To fix it** (when the rule is broken): move the other source to at least 3 × the own-source distance, or bring the mic closer to its own source.
+
+**Examples**:
+- Own source 0.3 m, other source 1.2 m → 4.0 : 1, bleed 12.0 dB below; the other source may come as close as 0.9 m.
+- Own source 0.3 m, other source 0.6 m → 2.0 : 1, bleed only 6.0 dB below; move the other source to at least 0.9 m or the mic to within 0.2 m.
 
 ## Tempo Change
 

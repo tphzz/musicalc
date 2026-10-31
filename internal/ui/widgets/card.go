@@ -21,6 +21,7 @@ type Card struct {
 	widget.BaseWidget
 	Content     fyne.CanvasObject
 	highlighted bool
+	outline     fyne.ThemeColorName // status outline, e.g. success or error; "" for none
 }
 
 // NewCard creates a card around content
@@ -33,6 +34,13 @@ func NewCard(content fyne.CanvasObject) *Card {
 // SetHighlighted outlines the card in the primary color
 func (c *Card) SetHighlighted(highlighted bool) {
 	c.highlighted = highlighted
+	c.Refresh()
+}
+
+// SetOutline outlines the card in a theme color to show a status (success, warning, error);
+// an empty name removes the outline
+func (c *Card) SetOutline(colorName fyne.ThemeColorName) {
+	c.outline = colorName
 	c.Refresh()
 }
 
@@ -94,10 +102,14 @@ func (r *cardRenderer) applyTheme() {
 		Offset:     fyne.NewPos(0, 2),
 		Variant:    canvas.DropShadow,
 	}
-	if r.card.highlighted {
+	switch {
+	case r.card.highlighted:
 		r.background.StrokeColor = th.Color(theme.ColorNamePrimary, v)
 		r.background.StrokeWidth = 2
-	} else {
+	case r.card.outline != "":
+		r.background.StrokeColor = th.Color(r.card.outline, v)
+		r.background.StrokeWidth = 2
+	default:
 		r.background.StrokeWidth = 0
 	}
 }

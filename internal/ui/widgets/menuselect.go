@@ -47,6 +47,8 @@ func NewGroupedMenu(groups []MenuGroup, selected string, onPick func(group MenuG
 type MenuSelect struct {
 	widget.BaseWidget
 	OnChanged func(value string)
+	// Placeholder is shown when the selected value matches no option, e.g. "Custom"
+	Placeholder string
 
 	groups   []MenuGroup
 	selected string
@@ -67,7 +69,8 @@ func (s *MenuSelect) Selected() string {
 	return s.selected
 }
 
-// SetSelected selects the option with the given value without calling OnChanged
+// SetSelected selects the option with the given value without calling OnChanged.
+// A value without an option clears the selection and shows the Placeholder.
 func (s *MenuSelect) SetSelected(value string) {
 	for _, g := range s.groups {
 		for _, o := range g.Options {
@@ -79,6 +82,9 @@ func (s *MenuSelect) SetSelected(value string) {
 			}
 		}
 	}
+	s.selected = ""
+	s.text = s.Placeholder
+	s.Refresh()
 }
 
 func (s *MenuSelect) showMenu() {

@@ -4,8 +4,8 @@ Website = "https://github.com/bzeiss/musicalc"
 Icon = "icons/appicon.png"
 Name = "MusiCalc"
 ID = "com.github.bzeiss"
-Version = "0.8.7"
-Build = 22
+Version = "0.9.0"
+Build = 25
 
 [Migrations]
 fyneDo = true

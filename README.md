@@ -79,12 +79,28 @@ This application is provided for informational purposes only and is not guarante
 
 ### 🎙️ Multi-Mic Alignment Delay
 - Calculate delay offsets to time-align multiple microphones to a single reference mic
-- Temperature input (C/F) to estimate speed of sound
-- Distance units (m/ft) for reference and target microphones
+- Setup card with labelled temperature (°C/°F), reference mic distance and sample rate, pre-filled with useful defaults (20 °C, 3 m, 48 kHz); it folds into a one-line summary to leave room for the mics
+- One distance unit (m/ft) for the reference, the microphones and the results
+- Switching a unit converts the values (4 m → 13.12 ft, 22 °C → 71.6 °F), so the setup and all delays stay the same
 - Per-mic results in milliseconds and samples (based on project sample rate)
-- One card per microphone; all delays update automatically when any input changes
+- One compact card per microphone (name, distance, delay, samples); all delays update automatically when any input changes
 - Mic names can be typed freely or picked from grouped presets (Drums, Overheads & Room, Instruments & Vocals)
 - If a target mic is further than the reference, the delay is shown as N/A
+
+### 〰️ Phase-Safe Distance
+- Find the "sweet spots" and "death zones" for two mics on one source, e.g. a kick drum's 60 Hz fundamental
+- Frequency input with grouped source presets (Drums, Bass, Guitars, Vocals) and air temperature (°C/°F)
+- Shows the wavelength at that frequency and the speed of sound used
+- Checks a path difference between the two mics: phase offset, zone (sweet spot, partial cancellation, death zone) and how much the frequency drops when both mics are summed
+- Colour-coded zone map over two wavelengths, with the checked distance marked
+- Lists the in-phase and opposed distances and how far you can stray from a sweet spot
+- Distances in m or ft; switching converts the values
+
+### 📏 3:1 Rule
+- Check that another source is at least three times farther from a mic than the mic's own source
+- Shows the distance ratio, whether the rule is met, and how much quieter the other source's bleed arrives (dB)
+- Tells you how close the other source may come, or what to change when the rule is broken
+- Distances in m or ft; switching converts the values
 
 ### 🎚️ Tempo Change Calculator
 - Calculate pitch changes from tempo adjustments

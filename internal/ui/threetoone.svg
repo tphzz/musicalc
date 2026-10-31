@@ -1,0 +1,15 @@
+<svg width="24" height="24" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <!-- A mic close to its source and three times farther from another -->
+    <g fill="#8E8E93">
+        <rect x="46" y="48" width="7" height="4" rx="2" />
+        <rect x="57" y="48" width="7" height="4" rx="2" />
+        <rect x="68" y="48" width="7" height="4" rx="2" />
+    </g>
+    <g fill="#5B43E7">
+        <circle cx="16" cy="50" r="12" />
+    </g>
+    <g fill="#FFB74D">
+        <circle cx="36" cy="50" r="7" />
+        <circle cx="86" cy="50" r="7" opacity="0.5" />
+    </g>
+</svg>

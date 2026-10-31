@@ -26,11 +26,7 @@ func NewAlignmentDelayCalculator() *AlignmentDelayCalculator {
 }
 
 func (c *AlignmentDelayCalculator) SetTemperature(value float64, unit string) {
-	if strings.EqualFold(unit, "f") {
-		c.TemperatureC = (value - 32) * 5 / 9
-		return
-	}
-	c.TemperatureC = value
+	c.TemperatureC = ToCelsius(value, unit)
 }
 
 func (c *AlignmentDelayCalculator) SetSampleRateLabel(label string) {
@@ -56,7 +52,7 @@ func (c *AlignmentDelayCalculator) RemoveMicAt(index int) {
 }
 
 func (c *AlignmentDelayCalculator) SpeedOfSoundMetersPerSecond() float64 {
-	return 331.3 + (0.606 * c.TemperatureC)
+	return SpeedOfSound(c.TemperatureC)
 }
 
 func (c *AlignmentDelayCalculator) Recalculate() {

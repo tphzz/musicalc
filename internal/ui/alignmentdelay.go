@@ -14,39 +14,27 @@ import (
 	"musicalc/internal/ui/widgets"
 )
 
-// NewAlignmentDelayTab creates the Multi-Mic Alignment Delay calculator
+// NewAlignmentDelayTab creates the Multi-Mic Alignment Delay calculator. The setup (temperature,
+// reference mic, sample rate) sits in a card that folds into one summary line, so the mics get
+// most of the screen; each mic is a compact two-line card.
 func NewAlignmentDelayTab() fyne.CanvasObject {
-	// Phones get shorter texts and a two-row header so inputs and columns aren't truncated
-	isMobile := fyne.CurrentDevice().IsMobile()
-
-	// Temperature input
-	tempEntry := widgets.NewNumericEntry()
-	//tempEntry.SetText("22")
-	tempEntry.SetPlaceHolder("Room Temp.")
-	if isMobile {
-		tempEntry.SetPlaceHolder("Temp.")
+	calc := logic.NewAlignmentDelayCalculator()
+	var refreshMics func()
+	refresh := func() {
+		if refreshMics != nil {
+			refreshMics()
+		}
 	}
 
-	tempUnitSelect := widget.NewSelect([]string{"C", "F"}, nil)
-	tempUnitSelect.SetSelected("C")
+	// Temperature and reference distance keep their values in °C and metres, so switching a
+	// unit converts the shown number instead of re-interpreting it
+	temp := newTemperatureInput("Temperature", logic.UnitCelsius, refresh)
+	tempUnitSelect := newUnitSelect([]string{logic.UnitCelsius, logic.UnitFahrenheit}, []*unitInput{temp}, func(string) { refresh() })
 
-	// Reference distance input
-	refDistEntry := widgets.NewNumericEntry()
-	//refDistEntry.SetText("5")
-	refDistEntry.SetPlaceHolder("Ref. Dist.")
+	ref := newDistanceInput("Distance", logic.UnitMeters, refresh)
 
-	refUnitSelect := widget.NewSelect([]string{"m", "ft"}, nil)
-	refUnitSelect.SetSelected("m")
-
-	// Sample rate dropdown
-	sampleRateSelect := widget.NewSelect([]string{
-		"44100",
-		"48000",
-		"88200",
-		"96000",
-		"192000",
-	}, nil)
-	sampleRateSelect.SetSelected("48000")
+	sampleRateSelect := widget.NewSelect([]string{"44100", "48000", "88200", "96000", "192000"}, nil)
+	sampleRateSelect.Selected = "48000"
 
 	// Common microphone positions, grouped into submenus of the name dropdown
 	micGroup := func(name string, positions ...string) widgets.MenuGroup {
@@ -80,69 +68,116 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	micMenuButton.Importance = widget.LowImportance // as in widget.SelectEntry
 	micNameSelect.ActionItem = micMenuButton
 
-	// Target distance input
+	// New mic distance, entered in the calculator's distance unit
 	targetDistEntry := widgets.NewNumericEntry()
-	targetDistEntry.SetPlaceHolder("Distance to Ref.")
-	if isMobile {
-		targetDistEntry.SetPlaceHolder("Distance")
+	targetDistEntry.SetPlaceHolder("Distance")
+
+	// One distance unit for the whole calculator: the reference, new mics and the mic cards.
+	// The mic row shows it as a suffix instead of having a dropdown of its own.
+	unitSuffix := widgets.NewMutedText(logic.UnitMeters)
+	distUnitSelect := newUnitSelect([]string{logic.UnitMeters, logic.UnitFeet}, []*unitInput{ref}, func(unit string) {
+		widgets.SetStyledText(unitSuffix, unit, "")
+		refresh()
+	})
+
+	// fixedWrap gives obj a fixed width; its height follows the row, so selects and buttons
+	// line up with the (taller) entries next to them
+	fixedWrap := func(obj fyne.CanvasObject, w float32) fyne.CanvasObject {
+		return container.New(fixedWidthLayout{width: w}, obj)
+	}
+	// textLines stacks texts with their usual line spacing instead of the larger widget padding
+	textGap := theme.Size(theme.SizeNameLineSpacing) - 2*theme.Size(theme.SizeNameInnerPadding)
+	textLines := func(objects ...fyne.CanvasObject) *fyne.Container {
+		return container.New(layout.NewCustomPaddedVBoxLayout(textGap), objects...)
 	}
 
-	targetUnitSelect := widget.NewSelect([]string{"m", "ft"}, nil)
-	targetUnitSelect.SetSelected("m")
-	targetUnitSelect.Resize(fyne.NewSize(40, targetUnitSelect.MinSize().Height))
-
-	calc := logic.NewAlignmentDelayCalculator()
-
-	formatTrimFloat := func(v float64, decimals int) string {
-		s := fmt.Sprintf("%.*f", decimals, v)
-		s = strings.TrimRight(s, "0")
-		s = strings.TrimRight(s, ".")
-		if s == "" || s == "-0" {
-			return "0"
+	// Setup card: a header with all values in one line, and the labelled settings when open.
+	// The labels stay visible next to the default values, so the form explains itself.
+	setupTitle := widgets.NewStyledText("Setup", theme.ColorNameForeground, theme.SizeNameText, fyne.TextStyle{Bold: true})
+	setupSummary := widgets.NewMutedText("")
+	setupSummary.Truncation = fyne.TextTruncateEllipsis
+	setupChevron := widget.NewIcon(theme.MenuDropDownIcon())
+	setupHint := widgets.NewMutedText("The reference mic is the farthest one, usually a room mic. " +
+		"Every mic is delayed to line up with it.")
+	setupHint.Wrapping = fyne.TextWrapWord
+	setupBody := container.NewVBox(
+		labeledRow("Temperature", container.NewBorder(nil, nil, nil, fixedWrap(tempUnitSelect, 70), temp.Entry)),
+		labeledRow("Reference mic", container.NewBorder(nil, nil, nil, fixedWrap(distUnitSelect, 70), ref.Entry)),
+		labeledRow("Sample rate", sampleRateSelect),
+		setupHint,
+	)
+	var content *fyne.Container
+	setOpen := func(open bool) {
+		setupBody.Hidden = !open
+		setupSummary.Hidden = open
+		if open {
+			setupChevron.SetResource(theme.MenuDropUpIcon())
+		} else {
+			setupChevron.SetResource(theme.MenuDropDownIcon())
 		}
-		return s
+		if content != nil {
+			content.Refresh() // the card's height changed
+		}
+	}
+	setupHeader := widgets.NewTapArea(
+		container.NewBorder(nil, nil, setupTitle, setupChevron, setupSummary),
+		func() { setOpen(setupBody.Hidden) },
+	)
+	setupCard := widgets.NewCard(container.NewVBox(setupHeader, setupBody))
+
+	updateSummary := func() {
+		value := func(in *unitInput, unit string) string {
+			if in.Empty() {
+				return "–"
+			}
+			return logic.FormatTrim(in.fromBase(in.Base, unit), 2) + " " + unit
+		}
+		rate := logic.FormatTrim(logic.ParseFloat(sampleRateSelect.Selected)/1000, 1) + " kHz"
+		widgets.SetStyledText(setupSummary,
+			value(temp, tempUnitSelect.Selected)+" · ref "+value(ref, distUnitSelect.Selected)+" · "+rate, "")
 	}
 
-	// Each microphone is shown as a card. The list is rebuilt on every change; it only holds a few mics.
+	// Each microphone is a compact card: name and distance on the left, delay and samples on the
+	// right. The list is rebuilt on every change; it only holds a few mics.
 	micList := container.NewVBox()
-	emptyHint := widgets.NewMutedText("Add a mic with a name and its distance to the reference.")
+	emptyHint := widgets.NewMutedText("Add each close mic with its distance to the source; its delay appears here.")
 	emptyHint.Wrapping = fyne.TextWrapWord
 
-	var refreshMics func()
 	newMicCard := func(index int, mic logic.AlignmentMic) fyne.CanvasObject {
-		name := widget.NewLabelWithStyle(mic.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		name := widgets.NewStyledText(mic.Name, theme.ColorNameForeground, theme.SizeNameText, fyne.TextStyle{Bold: true})
 		name.Truncation = fyne.TextTruncateEllipsis
-		unit := targetUnitSelect.Selected
-		distance := widgets.NewMutedText(formatTrimFloat(logic.FromMeters(mic.DistanceMeters, unit), 3) + " " + unit)
+		unit := distUnitSelect.Selected
+		distance := widgets.NewMutedText(logic.FormatTrim(logic.FromMeters(mic.DistanceMeters, unit), 2) + " " + unit)
 		// A plain button: the touch-responsive widgets.Button would stop drags on it from scrolling the list
 		removeBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			calc.RemoveMicAt(index)
-			refreshMics()
+			refresh()
 		})
 		removeBtn.Importance = widget.LowImportance
 
-		delayText, samplesText := formatTrimFloat(mic.DelayMS, 2)+" ms", fmt.Sprintf("%d samples", mic.DelaySamples)
+		delayText, samplesText := logic.FormatTrim(mic.DelayMS, 2)+" ms", fmt.Sprintf("%d samples", mic.DelaySamples)
 		delayColor, samplesColor := theme.ColorNameForeground, theme.ColorNamePlaceHolder
 		if mic.IsBeyondReference {
-			delayText, samplesText = "N/A", "Farther than the reference"
+			delayText, samplesText = "N/A", "farther than ref."
 			delayColor, samplesColor = theme.ColorNameWarning, theme.ColorNameWarning
 		}
-
-		return widgets.NewCard(container.New(layout.NewCustomPaddedVBoxLayout(0),
-			container.NewBorder(nil, nil, nil, container.NewHBox(distance, removeBtn), name),
-			// Overlap the texts' inner padding so they sit a padding apart, on a shared baseline
-			widgets.NewBaselineRow(theme.Padding()-2*theme.InnerPadding(),
-				widgets.NewStyledText(delayText, delayColor, theme.SizeNameSubHeadingText, fyne.TextStyle{Bold: true}),
-				widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{}),
-			),
+		alignRight := func(o fyne.CanvasObject) fyne.CanvasObject { return container.NewBorder(nil, nil, nil, o) }
+		result := textLines(
+			alignRight(widgets.NewStyledText(delayText, delayColor, theme.SizeNameText, fyne.TextStyle{Bold: true})),
+			alignRight(widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{})),
+		)
+		return widgets.NewCard(container.NewBorder(nil, nil, nil,
+			container.NewHBox(result, container.NewCenter(removeBtn)),
+			textLines(name, distance),
 		))
 	}
 
 	refreshMics = func() {
-		calc.SetTemperature(logic.ParseFloat(tempEntry.Text), tempUnitSelect.Selected)
+		calc.SetTemperature(temp.Base, logic.UnitCelsius)
 		calc.SetSampleRateLabel(sampleRateSelect.Selected)
-		calc.SetReferenceDistance(logic.ParseFloat(refDistEntry.Text), refUnitSelect.Selected)
+		calc.SetReferenceDistance(ref.Base, logic.UnitMeters)
 		calc.Recalculate()
+		updateSummary()
 
 		cards := make([]fyne.CanvasObject, 0, len(calc.Mics))
 		for i, mic := range calc.Mics {
@@ -155,7 +190,6 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		micList.Refresh()
 	}
 
-	// Add microphone button with emphasis
 	addButton := widgets.NewButton("+", func() {
 		name := strings.TrimSpace(micNameSelect.Text)
 		if name == "" {
@@ -166,96 +200,44 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		if dist == 0 {
 			return
 		}
-		calc.AddMic(name, dist, targetUnitSelect.Selected)
+		calc.AddMic(name, dist, distUnitSelect.Selected)
 
 		micNameSelect.SetText("")
 		targetDistEntry.SetText("")
-		refreshMics()
+		// The setup is usually done once the first mic is in: fold it away to make room
+		if len(calc.Mics) == 1 {
+			setOpen(false)
+		}
+		refresh()
 	})
-
-	// Recalculate when temperature, reference, sample rate or display unit change
-	tempEntry.OnChanged = func(string) { refreshMics() }
-	tempUnitSelect.OnChanged = func(string) { refreshMics() }
-	refDistEntry.OnChanged = func(string) { refreshMics() }
-	refUnitSelect.OnChanged = func(string) { refreshMics() }
-	sampleRateSelect.OnChanged = func(string) { refreshMics() }
-	targetUnitSelect.OnChanged = func(string) { refreshMics() }
-	refreshMics()
-
-	// Compact layout with minimal widths
-	tempEntry.Resize(fyne.NewSize(80, tempEntry.MinSize().Height))
-	refDistEntry.Resize(fyne.NewSize(80, refDistEntry.MinSize().Height))
-	targetDistEntry.Resize(fyne.NewSize(80, targetDistEntry.MinSize().Height))
-
-	// fixedWrap gives obj a fixed width; its height follows the row, so selects and buttons
-	// line up with the (taller) entries next to them
-	fixedWrap := func(obj fyne.CanvasObject, w float32) fyne.CanvasObject {
-		return container.New(fixedWidthLayout{width: w}, obj)
-	}
-
-	// Top section: Temperature, Reference, and Sample Rate on same row
-
-	tempGroup := container.NewBorder(
-		nil, nil, nil,
-		fixedWrap(tempUnitSelect, 60),
-		tempEntry,
-	)
-
-	refGroup := container.NewBorder(
-		nil, nil, nil,
-		fixedWrap(refUnitSelect, 70),
-		refDistEntry,
-	)
-
-	tempRefRow := container.NewGridWithColumns(2,
-		tempGroup,
-		refGroup,
-	)
-
-	var topRow fyne.CanvasObject = container.NewBorder(
-		nil, nil,
-		fixedWrap(sampleRateSelect, 100), nil,
-		tempRefRow,
-	)
-	if isMobile {
-		// Sample rate gets its own row, laid out like the Sample Length tab
-		topRow = container.NewVBox(
-			tempRefRow,
-			container.NewGridWithColumns(2,
-				widget.NewLabel("Sample Rate"),
-				sampleRateSelect,
-			),
-		)
-	}
-
-	// Emphasize the add button and make it wider
 	addButton.Importance = widget.HighImportance
 
-	fixedAddButton := fixedWrap(addButton, 50)
+	sampleRateSelect.OnChanged = func(string) { refresh() }
+
+	// Useful defaults: 20 °C is the usual reference temperature, 3 m a typical room mic distance
+	temp.SetText("20")
+	ref.SetText("3")
+	setOpen(true)
+	refresh()
 
 	micRow := container.NewBorder(
 		nil, nil, nil,
-		fixedAddButton,
-		container.NewBorder(nil, nil, nil, fixedWrap(targetUnitSelect, 70),
-			container.NewGridWithColumns(2,
-				micNameSelect,
-				targetDistEntry,
-			),
+		fixedWrap(addButton, 50),
+		container.NewBorder(nil, nil, nil, unitSuffix,
+			container.NewGridWithColumns(2, micNameSelect, targetDistEntry),
 		),
 	)
 
-	// The inputs stay on top; the mic cards fill and scroll in the remaining space.
-	// A little inset keeps the card shadows from being clipped by the scroller.
-	content := container.NewBorder(
+	// The setup and the mic row stay on top; the mic cards fill and scroll in the remaining space.
+	// A little inset keeps the card shadows from being clipped.
+	content = container.NewBorder(
 		container.NewVBox(
-			topRow,
-			widget.NewSeparator(),
+			container.New(layout.NewCustomPaddedLayout(2, 2, 2, 2), setupCard),
 			micRow,
 		),
 		nil, nil, nil,
 		container.NewVScroll(container.New(layout.NewCustomPaddedLayout(2, 4, 2, 2), micList)),
 	)
-
 	return content
 }
 
