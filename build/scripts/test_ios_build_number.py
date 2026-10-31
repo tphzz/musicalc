@@ -35,6 +35,26 @@ class CounterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             reserve(self.path, "other.bundle", "0.9.0")
 
+    def test_bundle_mismatch_reports_both_ids_without_changing_state(self):
+        reserve(self.path, "com.musicalc", "0.9.0", 0)
+        before = self.path.read_bytes()
+        with self.assertRaises(ValueError) as stopped:
+            reserve(self.path, "io.example.musicalc", "0.9.0")
+        message = str(stopped.exception)
+        self.assertIn(str(self.path), message)
+        self.assertIn("com.musicalc", message)
+        self.assertIn("io.example.musicalc", message)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_invalid_counter_shape_reports_recovery_without_changing_state(self):
+        for state in ([], {"bundle": "com.musicalc", "versions": []}):
+            with self.subTest(state=state):
+                self.path.write_text(json.dumps(state), encoding="utf-8")
+                before = self.path.read_bytes()
+                with self.assertRaisesRegex(ValueError, "restore|reconcile"):
+                    reserve(self.path, "com.musicalc", "0.9.0")
+                self.assertEqual(self.path.read_bytes(), before)
+
     def test_corrupt_or_exhausted_state_fails(self):
         self.path.write_text('{"bundle":"com.musicalc","versions":{"0.9.0":9999}}')
         with self.assertRaises(ValueError):

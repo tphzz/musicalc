@@ -77,6 +77,40 @@ are present as `build/dist/musicalc_x64.exe` and `musicalc_arm64.exe`:
 ./build/scripts/build-installer.ps1
 ~~~
 
+### Local NSIS installer for Windows x64
+
+For a local x64 NSIS package, use the Windows build prerequisites above plus
+NSIS 3.11 and run:
+
+~~~powershell
+./build/scripts/build-nsis-installer.ps1
+# If makensis.exe is not on PATH, supply its location:
+./build/scripts/build-nsis-installer.ps1 -MakeNSIS "C:\Program Files (x86)\NSIS\makensis.exe"
+~~~
+
+The builder runs `build/scripts/build-win.ps1`, then checks the rebuilt
+`build/dist/musicalc.exe` for AMD64 PE architecture, Git revision and an exact
+version match before compiling `build/installer/musicalc.nsi`. It writes
+`build/dist/installer/musicalc_<version>_windows_amd64_nsis_setup.exe`.
+A missing compiler, failed build or identity mismatch stops before compilation.
+
+The executable's `--version` argument prints its full desktop version and exits
+before opening a window. The builder captures this output through a pipe,
+which is required for the Windows GUI executable in PowerShell.
+
+This Unicode installer supports Windows 10+ on native x64 and retains the
+executable's CPU requirements. It requests administrator privileges, installs
+for all users under Program Files, adds a Start menu shortcut and an optional
+desktop shortcut, includes the MIT licence/icons, and registers an uninstaller.
+The standard wizard supports English and German. Uninstall removes only known
+installed files and its own shortcuts/registry entries; user preferences remain.
+
+An existing Inno Setup installation must be uninstalled before this NSIS package.
+Later NSIS installs reuse their recorded installation directory. Current aggregate
+CI still assembles the existing dual-architecture Inno installer; this NSIS
+builder is the local x64 route. Installation/upgrade testing is separate from
+successful compilation and payload verification.
+
 Linux packages retain the existing CPU optimization requirements. Tar archives
 contain a `musicalc/` directory and executable `install.sh`. Windows builds retain
 their existing CPU requirements too; an architecture label is not a promise of

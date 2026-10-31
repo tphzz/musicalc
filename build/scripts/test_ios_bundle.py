@@ -1,4 +1,8 @@
 import datetime
+from contextlib import redirect_stderr
+import io
+import tempfile
+from unittest.mock import patch
 import importlib.util
 from pathlib import Path
 import unittest
@@ -21,6 +25,24 @@ class BundleTests(unittest.TestCase):
 
     def verify(self):
         module.verify_bundle(self.info,self.profile,self.ent,"com.musicalc","ABCDEFGHIJ","0.9.0",1)
+
+    def test_missing_runner_config_reports_path_before_building(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            expected = home / ".config/musicalc-ios/config.json"
+            error = io.StringIO()
+            with patch.object(module.sys, "argv", ["build-ios.py"]), \
+                 patch.object(module.sys, "platform", "darwin"), \
+                 patch.object(module.Path, "home", return_value=home), \
+                 patch.object(module, "run") as run, \
+                 patch.object(module, "reserve") as reserve, \
+                 redirect_stderr(error), self.assertRaises(SystemExit) as stopped:
+                module.main()
+            self.assertEqual(stopped.exception.code, 2)
+            self.assertIn(str(expected), error.getvalue())
+            self.assertIn("runner account", error.getvalue())
+            run.assert_not_called()
+            reserve.assert_not_called()
 
     def test_valid_distribution(self):
         self.verify()

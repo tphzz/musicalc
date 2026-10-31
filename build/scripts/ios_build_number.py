@@ -37,8 +37,19 @@ def reserve(path, bundle, version, seed=None):
     with locked(path.with_suffix(".lock")):
         if path.exists():
             state = json.loads(path.read_text(encoding="utf-8"))
-            if state.get("bundle") != bundle or not isinstance(state.get("versions"), dict):
-                raise ValueError("Counter bundle/state mismatch")
+            if (not isinstance(state, dict)
+                    or not isinstance(state.get("bundle"), str)
+                    or not isinstance(state.get("versions"), dict)):
+                raise ValueError(
+                    f"Invalid build counter {path}: expected a bundle string and versions object; "
+                    "restore a verified backup or reconcile with App Store Connect"
+                )
+            if state["bundle"] != bundle:
+                raise ValueError(
+                    f"Build counter {path} belongs to {state['bundle']!r}, "
+                    f"but the configured bundle is {bundle!r}. "
+                    "Preserve this counter and reconcile the bundle ID before building"
+                )
         elif seed is None:
             raise ValueError("Counter missing; seed explicitly from App Store Connect before building")
         else:

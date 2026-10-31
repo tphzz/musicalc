@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"musicalc/internal/ui"
 	"musicalc/internal/ui/widgets"
+	"os"
 	"runtime"
 
 	"fyne.io/fyne/v2"
@@ -54,7 +57,18 @@ func showTabMenu(window fyne.Window, button fyne.CanvasObject, menu *fyne.Menu) 
 	popUp.ShowAtPosition(fyne.NewPos(fyne.Max(x, 0), pos.Y+button.Size().Height))
 }
 
+func writeVersion(args []string, out io.Writer) bool {
+	if len(args) != 1 || args[0] != "--version" {
+		return false
+	}
+	fmt.Fprintln(out, ui.DisplayVersion(version, fyne.AppMetadata{}, false))
+	return true
+}
+
 func main() {
+	if writeVersion(os.Args[1:], os.Stdout) {
+		return
+	}
 	myApp := app.NewWithID("com.musicalc")
 	myApp.Settings().SetTheme(ui.NewCustomTheme())
 

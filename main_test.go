@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -27,5 +29,23 @@ func TestCategoryMenuActions(t *testing.T) {
 	nativeMacMenu := categoryMenu(categories, func(int) {}, nil)
 	if len(nativeMacMenu.Items) != 2 {
 		t.Fatal("native macOS About must not be duplicated in the category menu")
+	}
+}
+
+func TestWriteVersion(t *testing.T) {
+	previous := version
+	t.Cleanup(func() { version = previous })
+	for _, value := range []string{"0.9.0-snapshot.gdbc3c2c", "0.9.0-snapshot", "0.9.0"} {
+		version = value
+		var out bytes.Buffer
+		if !writeVersion([]string{"--version"}, &out) || out.String() != value+"\n" {
+			t.Fatalf("version output=%q, want %q", out.String(), value+"\n")
+		}
+	}
+	for _, args := range [][]string{nil, {"other"}, {"--version", "other"}} {
+		var out bytes.Buffer
+		if writeVersion(args, &out) || strings.TrimSpace(out.String()) != "" {
+			t.Fatalf("unexpected version handling for %v", args)
+		}
 	}
 }

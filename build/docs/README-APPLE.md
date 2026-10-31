@@ -57,6 +57,22 @@ bash build/scripts/build-macos.sh
 MUSICALC_NOTARIZE=true bash build/scripts/build-macos.sh
 ~~~
 
+## iOS signing and notarization
+
+The current iPhone workflow distributes through **App Store Connect / TestFlight**.
+It uses an Apple Distribution identity and matching provisioning profile, then
+validates/uploads the IPA for Apple's processing. This route has no separate
+macOS `notarytool` submission or ticket-stapling step.
+
+For direct macOS distribution, the workflow signs with Developer ID, submits to
+Apple's macOS notarization service and staples the result. Apple's **iOS
+alternative distribution** has a separate App Store Connect Notarization review
+and alternative distribution package flow; that route is not configured here.
+
+Apple references: [distribution methods](https://help.apple.com/xcode/mac/current/en.lproj/dev31de635e5.html),
+[TestFlight distribution](https://help.apple.com/xcode/mac/current/en.lproj/dev2539d985f.html),
+[alternative distribution notarization](https://developer.apple.com/help/app-store-connect/managing-alternative-distribution/submit-for-notarization/).
+
 ## First App Store Connect app
 
 These are one-time account actions. Do them before the first iPhone workflow.
@@ -87,8 +103,25 @@ Apple guides: [create an app record](https://developer.apple.com/help/app-store-
 
 ## Runner-local iPhone configuration
 
-Create `~/.config/musicalc-ios/config.json` with mode 600 and a directory owned by
-the runner. Replace every example value:
+The packager reads `$HOME/.config/musicalc-ios/config.json` using the
+**self-hosted runner account's home directory**. A configuration in another
+Mac user's home or inside the repository checkout will not be found.
+
+Run the following in a terminal logged in as the runner account. The first two
+commands identify the account and exact destination:
+
+~~~bash
+whoami
+printf 'iOS configuration: %s/.config/musicalc-ios/config.json\n' "$HOME"
+mkdir -p "$HOME/.config/musicalc-ios/private_keys"
+chmod 700 "$HOME/.config/musicalc-ios" "$HOME/.config/musicalc-ios/private_keys"
+nano "$HOME/.config/musicalc-ios/config.json"
+chmod 600 "$HOME/.config/musicalc-ios/config.json"
+~~~
+
+Use the JSON below, replacing every example value. For packaging with upload
+disabled, `bundle_id`, `team_id`, `certificate` and `profile` are required.
+The app/API-key fields are required when enabling upload:
 
 ~~~json
 {
@@ -127,6 +160,14 @@ python3 build/scripts/ios_build_number.py \
 Seeding at zero records the starting point; the first workflow build reserves
 number **1**. For example, seeding an existing version at 12 makes its next
 reservation **13**.
+
+The `--bundle` value must exactly match `bundle_id` in the runner's
+`config.json`. Replace the example bundle consistently in both setup commands
+and configuration. The counter stores that identity in its `bundle` field;
+an identity mismatch is rejected before reserving a number. Preserve the counter
+and its version high-water marks when reconciling an incorrect setup value.
+For a counter belonging to a different app, keep it separately and initialize
+the intended app's counter using reconciled App Store Connect/reservation values.
 
 For an existing version, use the highest number already present in App Store
 Connect, or any higher locally reserved number, instead of zero. Seed each new

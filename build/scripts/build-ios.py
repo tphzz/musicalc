@@ -55,7 +55,10 @@ def main():
     directory = Path.home() / ".config/musicalc-ios"
     config_path = directory / "config.json"
     if not config_path.is_file():
-        parser.error("Complete build/docs/README-APPLE.md onboarding; missing runner-local iOS config")
+        parser.error(
+            f"Missing runner-local iOS config: {config_path}. "
+            "Create it as the runner account; see build/docs/README-APPLE.md"
+        )
     if config_path.stat().st_uid != os.getuid() or stat.S_IMODE(config_path.stat().st_mode) != 0o600:
         parser.error("iOS config must be owned by the runner and mode 600")
     config = json.loads(config_path.read_text(encoding="utf-8"))
