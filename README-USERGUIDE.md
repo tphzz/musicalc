@@ -206,14 +206,17 @@ Import and export use your system's own file dialog: the Windows Open/Save dialo
 
 When two mics pick up the same source at different distances, the farther mic hears it later. For a given frequency this delay is a phase offset: at some distances the two mics reinforce each other (**sweet spots**), at others that frequency cancels out (**death zones**). This calculator maps those distances, e.g. for a kick drum's 60 Hz fundamental.
 
-1. **Set the frequency** in Hz, or pick a typical fundamental from **Source** (Drums, Bass, Guitars, Vocals). Typing another frequency shows "Custom".
-2. **Set the temperature** (°C/°F) and the distance **Units** (m/ft). Switching converts the values.
-3. **Read the wavelength**: e.g. 5.74 m at 60 Hz and 22 °C, with half a wavelength and the speed of sound used.
-4. **Enter the path difference**: how much farther one mic is from the source than the other.
+1. **Check the Setup card**
+   - The card at the top holds **Source**, **Frequency**, **Temperature** and **Units**. The first time it starts open with a kick drum (60 Hz) at 22 °C.
+   - **Source**: pick a typical fundamental (Drums, Bass, Guitars, Vocals), or type any **Frequency** in Hz; another frequency shows "Custom".
+   - **Temperature** (°C/°F) and distance **Units** (m/ft): switching converts the values.
+   - Tap the card's header to fold it into one line, e.g. **Drums · Kick 60 Hz · 22 °C · m**, and again to open it. The setup and whether the card is open are kept when you close the app.
+2. **Read the wavelength**: e.g. 5.74 m at 60 Hz and 22 °C, with half a wavelength and the speed of sound used.
+3. **Enter the path difference**: how much farther one mic is from the source than the other.
    - The card turns **green** (sweet spot, under 60°), **amber** (partial cancellation, 60–120°) or **red** (death zone, over 120°).
    - It shows the phase offset and how much the frequency drops when both mics are summed.
-5. **Use the zone map**: it covers two wavelengths, shows green, amber and red ranges, and marks your path difference.
-6. **Read the zone list**: the exact in-phase distances (0, λ, 2λ) and opposed distances (½ λ, 1½ λ), and how far you may be from a sweet spot (±⅙ λ, ±60°).
+4. **Use the zone map**: it covers two wavelengths, shows green, amber and red ranges, and marks your path difference.
+5. **Read the zone list**: the exact in-phase distances (0, λ, 2λ) and opposed distances (½ λ, 1½ λ), and how far you may be from a sweet spot (±⅙ λ, ±60°).
 
 **Examples** (60 Hz, 22 °C, λ = 5.74 m):
 - Path difference 0.8 m → 50°, sweet spot, −0.9 dB when summed.
@@ -221,19 +224,31 @@ When two mics pick up the same source at different distances, the farther mic he
 
 ## 3:1 Rule
 
-The 3:1 rule says: another source should be at least **three times farther** from a mic than the mic's own source. Its bleed then arrives at least 9.5 dB quieter, which keeps comb filtering shallow when the mics are mixed.
+The 3:1 rule is about **one source reaching two mics**: its own mic and a neighbouring mic (e.g. Singer A's mic and Singer B's mic). If the neighbouring mic is at least **three times as far** from the source as its own mic, the source's spill into the neighbouring mic is about 9.5 dB lower, with matched mics and gain. That keeps comb filtering shallow when both mics are mixed.
 
-1. **Enter the distance from the mic to its own source** and **to the other source**.
-2. **Choose the Units** (m/ft). Switching converts both values.
-3. **Read the result**:
-   - The **distance ratio** (e.g. 4.0 : 1), green when the rule is met and red when it isn't.
-   - How much quieter (or louder) the other source arrives at this mic, in dB.
-   - **Margin**: how close the other source may come, and how far the mic may move from its own source, while still meeting the rule.
-   - **To fix it** (when the rule is broken): move the other source to at least 3 × the own-source distance, or bring the mic closer to its own source.
+Check **one source at a time**, then do the same for each other source: one source passing doesn't mean the others do.
 
-**Examples**:
-- Own source 0.3 m, other source 1.2 m → 4.0 : 1, bleed 12.0 dB below; the other source may come as close as 0.9 m.
-- Own source 0.3 m, other source 0.6 m → 2.0 : 1, bleed only 6.0 dB below; move the other source to at least 0.9 m or the mic to within 0.2 m.
+1. **Fill in the Setup card**
+   - **Source**: the source you are checking, e.g. "Singer A" (optional; the results use the name).
+   - **To its mic**: the distance from the source to its own mic.
+   - **To neighbour mic**: the distance from the same source to the neighbouring mic.
+   - **Neighbour gain**: how much louder the neighbouring channel is, in dB: more gain or fader, a more sensitive mic, or a pickup pattern that favours the source. Use a negative value if it is quieter. The default is 0 dB.
+   - **Target**: how far below the spill should be: **3:1 (9.5 dB)**, **10 dB below** or **15 dB below**. These are criteria to aim for, not a promise that spill is inaudible; a full 10 dB needs 3.16 : 1.
+   - **Units** (m/ft): switching converts the distances.
+   - The card starts open the first time. Tap its header to fold it into one line, e.g. **Singer A 1 / 3 m · +6 dB · ≥ 10 dB**. The setup is kept when you close the app.
+2. **Read the results**
+   - The **distance ratio**, e.g. 3.0 : 1 (neighbour mic : its mic).
+   - **Distance check**: ✓ **Meets the 3:1 guideline**, ! **At the 3:1 threshold** (exactly 3:1, no room to spare) or ✕ **Below 3:1**. This looks at the distances only.
+   - **Estimated spill**: how far below (or above) its own mic the source reaches the neighbouring mic, including the neighbour gain, and whether that meets the target. It is an estimate of the direct sound, assuming matched mics apart from the gain you entered.
+   - **Room to spare**: how close the neighbouring mic may come while still meeting the target.
+   - **To reach the target** (when it doesn't meet it): turn the neighbouring channel down by the missing dB (this also lowers that channel's own source), or move the neighbouring mic to at least the stated distance, or aim its rejection at the source. These are alternatives: try one, then check again.
+   - **Comb filtering**: if both contributions were otherwise identical, how much mixing them could boost and cut at some frequencies. When the spill is as loud as its own mic or louder, some frequencies can cancel completely. Listen to both mics summed in mono.
+
+**Examples** (Singer A):
+- 1 m / 4 m, 0 dB, target 3:1 → 4.0 : 1, meets the guideline; spill −12.0 dB, 2.5 dB better than 9.5 dB; the neighbouring mic may come as close as 3 m.
+- 1 m / 3 m, neighbour 6 dB louder, target 10 dB → at the threshold, but the spill is only −3.5 dB, 6.5 dB short: turn the neighbour down by 6.5 dB, or move it to at least 6.31 m.
+- 1 m / 2 m, 0 dB, target 3:1 → below 3:1, spill −6.0 dB, 3.5 dB short: move the neighbouring mic to at least 3 m, or turn it down by 3.5 dB.
+- 1 m / 2 m with the neighbour 6 dB quieter → still below 3:1, but the spill (−12.0 dB) meets the 9.5 dB target.
 
 ## Tempo Change
 

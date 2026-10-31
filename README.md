@@ -99,12 +99,15 @@ This application is provided for informational purposes only and is not guarante
 - Colour-coded zone map over two wavelengths, with the checked distance marked
 - Lists the in-phase and opposed distances and how far you can stray from a sweet spot
 - Distances in m or ft; switching converts the values
+- Source, frequency, temperature and units sit in a Setup card that folds into one line (e.g. "Drums · Kick 60 Hz · 22 °C · m"); the setup is kept between sessions
 
 ### 📏 3:1 Rule
-- Check that another source is at least three times farther from a mic than the mic's own source
-- Shows the distance ratio, whether the rule is met, and how much quieter the other source's bleed arrives (dB)
-- Tells you how close the other source may come, or what to change when the rule is broken
-- Distances in m or ft; switching converts the values
+- Checks one source reaching two mics: its own mic and a neighbouring mic
+- Setup card with the source, both distances, how much louder the neighbouring channel is (gain, sensitivity, pickup), the target (3:1 / 9.5 dB, 10 dB, 15 dB) and units; it folds into one line such as "Singer A 1 / 3 m · +6 dB · ≥ 10 dB"
+- Separate results: the distance check (meets 3:1, at the threshold, below) and the estimated spill of the source in the neighbouring mic, against the target
+- Concrete fixes: how many dB to turn the neighbouring channel down, or how far to move the neighbouring mic; or how much room there is to spare
+- Comb-filter range stated as a condition (otherwise identical signals), including when full cancellation is possible
+- Distances in m or ft; switching converts the values; the setup is kept between sessions
 
 ### 🎚️ Tempo Change Calculator
 - Calculate pitch changes from tempo adjustments

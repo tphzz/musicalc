@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -68,8 +69,9 @@ func zoneDot(colorName fyne.ThemeColorName) fyne.CanvasObject {
 // two mics on one source makes a frequency reinforce (sweet spots) or cancel (death zones)
 func NewPhaseDistanceTab() fyne.CanvasObject {
 	var update func()
+	restoring := false // the last session is being put on screen
 	refresh := func() {
-		if update != nil {
+		if update != nil && !restoring {
 			update()
 		}
 	}
@@ -99,7 +101,7 @@ func NewPhaseDistanceTab() fyne.CanvasObject {
 		refresh()
 	}
 
-	temp := newTemperatureInput("Temp.", logic.UnitCelsius, refresh)
+	temp := newTemperatureInput("Temperature", logic.UnitCelsius, refresh)
 	tempUnit := newUnitSelect([]string{logic.UnitCelsius, logic.UnitFahrenheit}, []*unitInput{temp}, func(string) { refresh() })
 
 	path := newDistanceInput("Path difference", logic.UnitMeters, refresh)
@@ -161,9 +163,30 @@ func NewPhaseDistanceTab() fyne.CanvasObject {
 		tolerance,
 	))
 
+	// Setup card: source, frequency, temperature and units; the path difference stays in the
+	// check card, as it is the value people vary
+	var content *fyne.Container
+	var saveSession func()
+	setup := newSetupCard(container.NewVBox(
+		labeledRow("Source", presetSelect),
+		labeledRow("Frequency", withSuffix(freqEntry, widgets.NewMutedText("Hz"))),
+		labeledRow("Temperature", container.NewBorder(nil, nil, nil, container.New(fixedWidthLayout{width: 70}, tempUnit), temp.Entry)),
+		labeledRow("Units", distUnit),
+		wrapped(widgets.NewMutedText("Pick a source for its typical fundamental, or type any frequency. "+
+			"Enter the path difference between the two mics below.")),
+	), func(bool) {
+		if content != nil {
+			content.Refresh() // the card's height changed
+		}
+		if saveSession != nil {
+			saveSession()
+		}
+	})
+
 	results, relayout := newResultsScroll(wlCard, checkCard, mapCard, zonesCard)
 	update = func() {
 		defer relayout()
+		defer saveSession()
 		freq := logic.ParseFloat(freqEntry.Text)
 		tempC := temp.Base
 		unit := distUnit.Selected
@@ -177,6 +200,21 @@ func NewPhaseDistanceTab() fyne.CanvasObject {
 			}
 			return strings.Join(parts, " · ") + " " + unit
 		}
+
+		title := presetSelect.Text()
+		if title == "" {
+			title = "Custom"
+		}
+		setup.SetTitle(title)
+		freqShown := "–"
+		if freq > 0 {
+			freqShown = logic.FormatTrim(freq, 2)
+		}
+		tempSummary := "–"
+		if !temp.Empty() {
+			tempSummary = minusSign(logic.FormatTrim(logic.FromCelsius(tempC, tempUnit.Selected), 1))
+		}
+		setup.SetSummary(freqShown + " Hz · " + tempSummary + " " + tempUnit.Selected + " · " + unit)
 
 		wl := logic.Wavelength(freq, tempC)
 		if wl <= 0 {
@@ -243,22 +281,58 @@ func NewPhaseDistanceTab() fyne.CanvasObject {
 			dist(logic.SafeTolerance(wl)), logic.PhaseSafeDegrees), "")
 	}
 
-	freqEntry.SetText("60")
-	temp.SetText("22")
+	saveSession = func() {
+		if restoring {
+			return
+		}
+		sess := phaseSession{Frequency: logic.ParseFloat(freqEntry.Text), TemperatureC: temp.Base,
+			TemperatureUnit: tempUnit.Selected, DistanceUnit: distUnit.Selected,
+			PathMeters: path.Base, HasPath: !path.Empty(), Open: setup.IsOpen()}
+		if data, err := json.Marshal(sess); err == nil {
+			fyne.CurrentApp().Preferences().SetString(prefPhaseSession, string(data))
+		}
+	}
+
+	// Restore the last setup; the first start opens the card with a kick drum at 22 °C
+	sess := phaseSession{Frequency: 60, TemperatureC: 22, TemperatureUnit: logic.UnitCelsius,
+		DistanceUnit: logic.UnitMeters, Open: true}
+	if data := fyne.CurrentApp().Preferences().String(prefPhaseSession); data != "" {
+		_ = json.Unmarshal([]byte(data), &sess)
+	}
+	restoring = true
+	if sess.TemperatureUnit != "" {
+		tempUnit.SetSelected(sess.TemperatureUnit)
+	}
+	if sess.DistanceUnit != "" {
+		distUnit.SetSelected(sess.DistanceUnit)
+	}
+	temp.setBase(sess.TemperatureC)
+	if sess.HasPath {
+		path.setBase(sess.PathMeters)
+	}
+	freqEntry.SetText(logic.FormatTrim(sess.Frequency, 2))
+	setup.SetOpen(sess.Open)
+	restoring = false
 	refresh()
 
-	content := container.NewBorder(
-		container.NewVBox(
-			labeledRow("Frequency", withSuffix(freqEntry, widgets.NewMutedText("Hz"))),
-			labeledRow("Source", presetSelect),
-			container.NewGridWithColumns(2,
-				container.NewBorder(nil, nil, nil, container.New(fixedWidthLayout{width: 64}, tempUnit), temp.Entry),
-				container.NewBorder(nil, nil, widget.NewLabel("Units"), nil, distUnit),
-			),
-			widget.NewSeparator(),
-		),
+	content = container.NewBorder(
+		container.New(layout.NewCustomPaddedLayout(2, 2, 2, 2), setup.Card),
 		nil, nil, nil,
 		results,
 	)
 	return content
+}
+
+// prefPhaseSession stores the Phase-Safe Distance setup, so it is back when the app starts again
+const prefPhaseSession = "phase.session"
+
+// phaseSession is the Phase-Safe Distance setup on screen
+type phaseSession struct {
+	Frequency       float64 `json:"frequency"`
+	TemperatureC    float64 `json:"temperatureC"`
+	TemperatureUnit string  `json:"temperatureUnit"`
+	DistanceUnit    string  `json:"distanceUnit"`
+	PathMeters      float64 `json:"pathMeters"`
+	HasPath         bool    `json:"hasPath"`
+	Open            bool    `json:"open"`
 }

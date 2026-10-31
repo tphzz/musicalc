@@ -149,37 +149,21 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 
 	// Setup card: a header with all values in one line, and the labelled settings when open.
 	// The labels stay visible next to the values, so the form explains itself.
-	setupTitle := widgets.NewStyledText("Setup", theme.ColorNameForeground, theme.SizeNameText, fyne.TextStyle{Bold: true})
-	setupSummary := widgets.NewMutedText("")
-	setupSummary.Truncation = fyne.TextTruncateEllipsis
-	setupChevron := widget.NewIcon(theme.MenuDropDownIcon())
-	setupBody := container.NewVBox(
+	var content *fyne.Container
+	setup := newSetupCard(container.NewVBox(
 		labeledRow("Source", sourceEntry),
 		labeledRow("Temperature", container.NewBorder(nil, nil, nil, fixedWrap(tempUnitSelect, 70), temp.Entry)),
 		labeledRow("Reference mic", container.NewBorder(nil, nil, nil, fixedWrap(distUnitSelect, 70), ref.Entry)),
 		labeledRow("Sample rate", sampleRateSelect),
 		wrappedMuted("All distances are measured from the source. The reference mic is the farthest one, "+
 			"usually a room mic; the other mics get delay to line up with it."),
-	)
-	var content *fyne.Container
-	setOpen := func(open bool) {
-		setupBody.Hidden = !open
-		setupSummary.Hidden = open
-		if open {
-			setupChevron.SetResource(theme.MenuDropUpIcon())
-		} else {
-			setupChevron.SetResource(theme.MenuDropDownIcon())
-		}
+	), func(bool) {
 		if content != nil {
 			content.Refresh() // the card's height changed
 		}
-	}
+	})
+	setOpen := setup.SetOpen
 	foldSetup = func() { setOpen(false) }
-	setupHeader := widgets.NewTapArea(
-		container.NewBorder(nil, nil, setupTitle, setupChevron, setupSummary),
-		func() { setOpen(setupBody.Hidden) },
-	)
-	setupCard := widgets.NewCard(container.NewVBox(setupHeader, setupBody))
 
 	updateSetupHeader := func() {
 		value := func(in *unitInput, unit string) string {
@@ -196,8 +180,8 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 			"ref "+value(ref, distUnitSelect.Selected),
 			value(temp, tempUnitSelect.Selected),
 			logic.FormatTrim(logic.ParseFloat(sampleRateSelect.Selected)/1000, 1)+" kHz")
-		widgets.SetStyledText(setupSummary, strings.Join(parts, " · "), "")
-		widgets.SetStyledText(setupTitle, presets.title(), "")
+		setup.SetSummary(strings.Join(parts, " · "))
+		setup.SetTitle(presets.title())
 	}
 
 	// saveSession stores the setup on screen, so it is back when the app starts again
@@ -360,7 +344,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	// A little inset keeps the card shadows from being clipped.
 	content = container.NewBorder(
 		container.NewVBox(
-			container.New(layout.NewCustomPaddedLayout(2, 2, 2, 2), setupCard),
+			container.New(layout.NewCustomPaddedLayout(2, 2, 2, 2), setup.Card),
 			micRow,
 		),
 		nil, nil, nil,

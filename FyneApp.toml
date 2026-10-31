@@ -5,7 +5,7 @@ Icon = "icons/appicon.png"
 Name = "MusiCalc"
 ID = "com.github.bzeiss"
 Version = "0.9.0"
-Build = 27
+Build = 29
 
 [Migrations]
 fyneDo = true

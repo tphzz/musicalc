@@ -69,6 +69,11 @@ func (s *MenuSelect) Selected() string {
 	return s.selected
 }
 
+// Text returns what the select shows: "Group · Label", or the Placeholder
+func (s *MenuSelect) Text() string {
+	return s.text
+}
+
 // SetSelected selects the option with the given value without calling OnChanged.
 // A value without an option clears the selection and shows the Placeholder.
 func (s *MenuSelect) SetSelected(value string) {
