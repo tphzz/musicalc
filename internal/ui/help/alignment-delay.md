@@ -16,7 +16,7 @@ Sound travels at about **343 m/s** at 20 °C, so it needs about **2.9 ms per met
 
 *When the hit arrives: before and after adding the delays.*
 
-The calculator delays every close mic by exactly the time the sound needs to travel the extra distance to the **reference mic**, the mic farthest from the source:
+For every close mic, the calculator works out the delay that makes up for its shorter path: the time the sound needs to travel the extra distance to the **reference mic**, usually the farthest mic:
 
 - **delay = (reference distance − mic distance) ÷ speed of sound**
 - **speed of sound ≈ 331.3 + 0.606 × temperature (°C)** m/s
@@ -44,16 +44,16 @@ The Setup card starts open with Snare, 20 °C, 3 m and 48 kHz, and folds into on
 - **Each mic card** shows the mic's distance on the left, and the **delay to add** in ms and samples on the right.
 - **0 ms · reference**: the mic is at the reference distance; it needs no delay.
 - **A negative value in amber**, e.g. −1.46 ms · 70 samples earlier: the mic is *farther* than the reference. A delay can't make it earlier. Move its track earlier by that amount in the DAW, or make it the reference instead.
-- **Pair note:** when a stereo pair (e.g. Overhead L and R) gets different delays, an amber note shows the difference. Delaying the two sides differently changes the timing between them and moves the stereo image; give both the same delay to keep it.
+- **Pair note:** when two mics with the same name ending in L and R (or Left and Right), e.g. Overhead L and Overhead R, get delays that differ by at least one sample, an amber note shows the difference. Delaying the two sides differently changes the timing between them and moves the stereo image; give both the same delay to keep it.
 
 ## In practice
 
 1. **Choose the source** you care most about lining up; for drums usually the snare, sometimes the kick.
-2. **Measure from the source** to every mic capsule with a tape measure: to the snare's top head, not to the stand. A few centimetres don't matter (1 cm ≈ 0.03 ms).
+2. **Measure from the source** to every mic capsule with a tape measure: to the snare's top head, not to the stand. Each centimetre is about 0.03 ms (1.4 samples at 48 kHz), so measure as carefully as you can.
 3. **Pick the reference:** usually the farthest mic you keep in the mix, often the room. Everything is delayed to line up with it.
 4. **Enter the delays** in your DAW, as a track delay or with a time-adjust plug-in on each close mic.
-5. **Check in mono:** solo the close mic with the reference, switch the delay on and off, and listen. The aligned version usually sounds fuller and punchier in the low end.
-6. **Fine-tune by ear or by eye:** zoom in on a hit in both tracks and compare. The calculation gets you close; the waveforms show the rest.
+5. **Check in mono:** solo the close mic with the reference, switch the delay on and off, and listen. Aligned can sound tighter and fuller, but not always; keep whichever sounds better.
+6. **Fine-tune by ear or by eye:** zoom in on a hit in both tracks and compare. The calculation is a starting point; the waveforms show the actual offset.
 
 Keep standard setups as **presets** in the **⋮** menu: Save as…, Load, Manage, and Import/Export to move them between computers and phones. A preset stores the source, distances, units, sample rate and mics, but not the temperature.
 

@@ -37,9 +37,9 @@ func CalculateFromNewTempo(originalTempo, newTempo float64) TempoChangeResult {
 		cents = int(math.Round((semitonesFull - float64(semitones)) * 100.0))
 	}
 
-	// 50-cent notation shows raw semitone split (floor + fractional)
-	// E.g., -55.69 = floor(-55.69) = -56, fractional = -55.69 - (-56) = 0.31 → +31 cents
-	semitones50 := int(math.Floor(semitonesFull))
+	// 50-cent notation rounds to the nearest semitone and shows the rest as ±50 cents, like
+	// Frequency to Note: e.g. +3.70 = +4 semitones −30 cents, −55.69 = −56 semitones +31 cents
+	semitones50 := int(math.Round(semitonesFull))
 	cents50 := int(math.Round((semitonesFull - float64(semitones50)) * 100.0))
 
 	return TempoChangeResult{

@@ -27,8 +27,8 @@ When audio is played faster without time-stretching, it gets higher; slower, it 
 
 ## Reading the results
 
-- **Transpose Semis / Cents:** the pitch shift in standard notation (100 cents = 1 semitone).
-- **50-cent notation:** the same shift as some samplers show it (50 cents = 1 semitone).
+- **Transpose Semis / Cents:** the pitch shift as whole semitones plus 0 to 99 cents (100 cents = 1 semitone), e.g. +3 semitones +70 cents.
+- **Semis / Cents (50¢n):** the same shift rounded to the nearest semitone, with the rest as −50 to +50 cents, e.g. +4 semitones −30 cents.
 - **Time stretching %:** 100 % keeps the length; 200 % is twice as long (half the tempo); 50 % is half as long (double the tempo).
 - **Tempo Delta:** how much faster (+) or slower (−) the new tempo is, in percent.
 
@@ -45,5 +45,5 @@ When audio is played faster without time-stretching, it gets higher; slower, it 
 
 ## Good to know
 
-- Results stay within 5–1000 BPM.
+- Transposing is limited so that the new tempo stays within 5–1000 BPM.
 - The calculator describes re-pitching (tempo and pitch together). Modern time-stretching changes the tempo without changing the pitch; then only **Time stretching %** applies.

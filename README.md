@@ -42,7 +42,7 @@ This application is provided for informational purposes only and is not guarante
 ### Time & Tempo
 
 #### ⏱️ Timecode
-- Frame rates 23.976, 24, 25, 29.94, 29.97, 29.97 drop frame, 30, 50, 59.94 and 60 fps, with exact NTSC fractions
+- Frame rates 23.976, 24, 25, 29.94, 29.97, 29.97 drop frame, 30, 50, 59.94 and 60 fps
 - Two timecode fields with right-to-left digit entry and a `.` shorthand for `00`
 - Add and subtract; the result moves to the first field for the next step
 - Switching the frame rate keeps the H:M:S:F notation and recalculates the frame count
@@ -98,7 +98,7 @@ All three Multi-Mic calculators keep their settings in a **Setup card** that fol
 #### 〰️ Two-Mic Sum
 - Main result: how much later Mic B arrives than Mic A, in ms and samples, from the extra distance or a measured time
 - Mic B's level and polarity, and a delay on Mic A; **Align** previews the delay that lines up the direct sound
-- Frequency-response graph of the combined level, in dB relative to Mic A alone, with the range of interest shaded and a cursor; the graph follows the range of interest and shows the response before your changes as a dashed line
+- Frequency-response graph of the combined level, in dB relative to Mic A alone, with the range of interest shaded and a cursor; the graph follows the range of interest, and after a change shows the plain starting point (equal levels, no delay) as a dashed line
 - Predicted cancellation (dips) and reinforcement (peaks) frequencies and their depth
 - Source presets pick a typical range of interest (e.g. Kick 50–100 Hz, Cymbals 3–12 kHz)
 - States its model and assumptions: the same signal reaching both mics, without room reflections; check the mics summed in mono

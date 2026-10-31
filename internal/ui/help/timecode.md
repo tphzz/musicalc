@@ -6,8 +6,8 @@ Add and subtract timecodes, and see how many frames they are at any frame rate.
 
 - Adding up the lengths of clips, cues or reels.
 - Finding the distance between two timecodes, e.g. a cue's start and end.
-- Converting a timecode position into a frame count for an EDL, AAF or a sampler.
-- Checking what a timecode means at another frame rate.
+- Turning a timecode into a frame count, for tools that work in frames.
+- Checking how many frames a timecode is at another frame rate.
 
 ## How it works
 
@@ -51,5 +51,6 @@ An empty field counts as 0.
 
 ## Good to know
 
-- 23.976, 29.97 and 59.94 fps use their exact NTSC values (24000/1001, 30000/1001 and 60000/1001).
-- Changing the frame rate doesn't convert the *time*: it keeps the timecode as written. To move material from one rate to another, its timecodes usually stay the same while its frame counts change.
+- Timecode numbers whole frames, so 23.976, 29.97 and 59.94 fps count frames exactly like 24, 30 and 60 fps. Only **29.97 df** counts differently, because it skips frame numbers. **29.94** counts the same as 29.97.
+- The calculator works with timecode and frame counts, not with clock time: it doesn't tell you how many real seconds a timecode lasts at an NTSC rate.
+- Changing the frame rate keeps the timecode as written and only counts its frames again; it doesn't convert a position or a duration from one rate to another.

@@ -10,29 +10,32 @@ The closest note to a frequency, and how far off it is in cents.
 
 ## How it works
 
-The calculator compares the frequency with the notes of standard tuning (A4 = 440 Hz, twelve-tone equal temperament), picks the closest note, and gives the difference in **cents**: 100 cents are one semitone. Because every note is at most half a semitone away from the closest note, the deviation is always between −50 and +50 cents.
+The calculator compares the frequency with the notes of standard tuning (A4 = 440 Hz, twelve-tone equal temperament) and gives the difference in **cents**: 100 cents are one semitone. It shows the result in two ways:
+
+- **Note / Cents** take the note at or below the frequency, and how far above it the frequency is: 0 to 99 cents.
+- **Note (50¢n) / Cents (50¢n)** take the closest note, and how far the frequency is from it: −50 to +50 cents.
 
 ## How to use it
 
 1. **Enter the frequency** in Hz, e.g. 440, 261.63 or 1000.
 2. Optionally switch the **Middle C** convention (C3 or C4); it changes the octave numbers.
 3. Or use the **Quickselect** buttons **C3**, **A3**, **C4** and **A4** to fill in the frequency of that note.
-4. **Play** (on a computer) plays a 3-second test tone at the frequency. **Reset** returns to 440 Hz and the C3 convention.
+4. **Play** plays a 3-second test tone at the frequency on a computer; on Android the button does nothing. **Reset** returns to 440 Hz and the C3 convention.
 
 ## Reading the results
 
-- **Note / Cents:** the closest note and its deviation in standard notation. Positive cents are sharp (higher), negative cents flat (lower).
-- **Note (50¢n) / Cents (50¢n):** the notation some samplers use, where 50 cents is one semitone.
+- **Note / Cents:** the note at or below the frequency, plus 0 to 99 cents.
+- **Note (50¢n) / Cents (50¢n):** the closest note. Positive cents are sharp (higher), negative cents flat (lower). This is usually the one to tune by.
 
 ## In practice
 
-- **Tuning a sample:** a sample at 367 Hz is F#3 −14 cents (C3 convention). To bring it to F#, raise it by 14 cents in the sampler.
-- **Resonances:** a room resonance or a ringing tom near a note of the song can sound good; one between notes often clashes.
+- **Tuning a sample:** a sample at 367 Hz is F#3 −14 cents in 50-cent notation (C3 convention). To bring it to F#, raise it by 14 cents in the sampler.
+- **Resonances:** name a room resonance or a ringing tom, to see whether it sits on a note of the song or between notes.
 
 ## Examples
 
-- 440 Hz is A3 (C3 convention), 0 cents.
-- 367 Hz is **F#3 −14 cents** in standard notation, or F3 +86 cents in 50-cent notation.
+- 440 Hz is A3 (C3 convention), 0 cents in both notations.
+- 367 Hz is **F3 +86 cents**, or **F#3 −14 cents** in 50-cent notation.
 
 ## Good to know
 

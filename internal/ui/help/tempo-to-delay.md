@@ -6,7 +6,7 @@ Delay times and modulation rates for every note value at a tempo: what to set a 
 
 - Setting a delay plug-in or hardware delay to quarter notes, dotted eighths or triplets.
 - Syncing an LFO, tremolo, auto-pan or filter sweep to the tempo by hand.
-- Setting pre-delay, gate or release times that breathe with the song.
+- Setting reverb pre-delay, gate or release times to a note value.
 
 ## How it works
 
@@ -46,4 +46,5 @@ At 120 BPM:
 
 ## Good to know
 
+- The times assume a steady tempo. In a song that speeds up or slows down, they only match the tempo you entered.
 - The **Tap Tempo** calculator has a larger tap area and also shows how steady your taps were; its **Delay** button sends the tempo straight to this calculator.

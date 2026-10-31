@@ -23,7 +23,7 @@ MusiCalc groups its calculators into four categories. Each calculator answers on
 
 ## Things that work the same everywhere
 
-- **Your values stay.** Each calculator keeps its values when you switch to another one and back, and when you open help.
-- **Setup cards.** The Multi-Mic calculators keep their settings in a **Setup** card at the top. Tap its header to fold it into one line that still shows every value, and tap again to open it. The setup, and whether the card is open, is kept when you close the app.
+- **Your values stay.** Each calculator keeps its values when you switch to another one and back, and when you open help. Only the Multi-Mic calculators also keep them when you close the app.
+- **Setup cards.** The Multi-Mic calculators keep their settings in a **Setup** card at the top. Tap its header to fold it into one line that still shows every value, and tap again to open it. The setup is kept when you close the app. Two-Mic Sum and 3:1 Rule also remember whether the card was open; Alignment Delay opens it only while it has no mics.
 - **Units convert.** Distances can be entered in metres or feet, temperatures in °C or °F. Switching a unit converts the shown values instead of re-interpreting them: 4 m becomes 13.12 ft, 22 °C becomes 71.6 °F, and every result stays the same.
 - **On Android** the tab bar hides while the on-screen keyboard is open and comes back when it closes.

@@ -44,19 +44,20 @@ The calculator shows this as a graph of the **combined level relative to Mic A a
 
 - **The graph** shows the combined level over frequency. The **shaded band** is your range of interest; the **cursor** marks the frequency you set, and the line below the graph gives the level there and the lowest and highest level within the range.
 - Where the comb gets too fine to draw as a line, the graph shows the **band** the level swings in.
-- **Predicted cancellation and reinforcement** lists the first dips and peaks from the graph's range on, how deep they go, and how far apart they repeat.
+- **Predicted cancellation and reinforcement** lists the first three dips and peaks from the graph's range on, and how deep they go; for a dense comb also how far apart they repeat.
+- **To line up the direct sound** gives the delay that would do it, and where to apply it. Whether it sounds better is up to your ears.
 
 ![After Align: a flat +6 dB, with the response before as a dashed line](images/sum-aligned.png)
 
-- After a change, a **dashed line** shows the response before it, so you can compare.
+- Once you set a delay on Mic A, a level other than 0 dB or inverted polarity, a **dashed line** shows the plain starting point for comparison: both mics at the same level, normal polarity, no delay.
 
 ## In practice
 
 1. **Measure or estimate** how much farther the second mic is from the source than the first. If you can, measure the time difference instead: zoom in on a hit in both tracks and read the offset; enter it in **ms**.
 2. **Look at your range of interest.** A dip right in it (e.g. at 60 Hz for a kick) is what makes the combination sound thin.
 3. **Try the fixes, in this order:**
-   - **Align:** delay the closer mic so the direct sound lines up. This removes the comb for the direct sound.
-   - **Polarity:** if a dip sits in the range of interest, flipping Mic B's polarity moves the peaks there instead.
+   - **Align:** delay the closer mic so the direct sound lines up. In the model this removes the comb; in a real room, reflections still arrive at other times.
+   - **Polarity:** flipping Mic B's polarity swaps every dip and peak. It helps when a dip sits where you need level, but it can move another dip into your range; check the graph.
    - **Level:** a quieter Mic B makes all dips shallower, at the cost of its contribution.
 4. **Listen in mono**, switching your change on and off. Trust your ears over the graph.
 
@@ -67,7 +68,7 @@ Mic B 4 m farther, 20 °C, 48 kHz, Kick 50–100 Hz:
 | Setting | Result |
 |---|---|
 | Equal level, normal polarity | Mic B arrives 11.65 ms (559 samples) later. At 60 Hz the mix is +1.4 dB; within 50–100 Hz it swings from −5.8 to +6.0 dB. |
-| Align (Mic A delayed by 11.65 ms) | +6.0 dB at every frequency. |
+| Align (Mic A delayed by 11.65 ms) | +6.0 dB at every frequency, in the model. |
 | Mic B at −6 dB, inverted polarity | Dips only reach −6.0 dB and peaks +3.5 dB; the dips move to 85.9 · 171.7 Hz. |
 
 ## Good to know

@@ -1,6 +1,6 @@
 # Sample Length
 
-The length of a loop in samples and milliseconds, and the tempo it fits. Change any field and the others follow.
+The length of a loop in samples and milliseconds, and the tempo it fits. Enter the tempo or either length, and the other two follow.
 
 ## When to use it
 
@@ -18,7 +18,7 @@ A beat lasts 60 ÷ BPM seconds. A loop of a number of beats therefore lasts beat
 2. **Set the Beats**: the loop's length in beats (4 = one bar of 4/4, 16 = four bars).
 3. **Enter one of**: the **Tempo**, the **Length in samples** or the **Length in ms**. The other two follow.
 
-**Reset** returns to 44100 Hz, 4 beats and 120 BPM.
+Changing the sample rate or the beats keeps the tempo and recalculates both lengths. **Reset** returns to 44100 Hz, 4 beats and 120 BPM.
 
 ## Reading the results
 
@@ -28,7 +28,7 @@ A beat lasts 60 ÷ BPM seconds. A loop of a number of beats therefore lasts beat
 
 ## In practice
 
-- **Finding a loop's tempo:** read its length in samples from your editor, set the number of beats you hear, and read the tempo.
+- **Finding a loop's tempo:** set the sample rate and the number of beats you hear first, then enter the loop's length in samples from your editor and read the tempo.
 - **Cutting a loop:** set the tempo and beats, and cut at the sample count shown.
 - Count beats carefully: if the tempo comes out half or double what you expect, the number of beats is off by a factor of two.
 

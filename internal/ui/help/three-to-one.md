@@ -17,9 +17,9 @@ Every mic picks up some of the other sources too: this is **spill** (or bleed). 
 The level of a sound falls by about **6 dB every time the distance doubles**. So the farther the neighbouring mic is from the source, compared with the source's own mic, the quieter the spill:
 
 - **Spill** ≈ 20 × log10(distance to its mic ÷ distance to the neighbour mic) + **neighbour gain**
-- At **three times the distance** the spill is about **9.5 dB** lower. That is the classic **3:1 rule**, enough to keep the comb shallow: at most about +2.5 / −3.5 dB.
+- At **three times the distance** the spill is about **9.5 dB** lower. That is the classic **3:1 rule**, which keeps the comb shallow in this simple model: at most about +2.5 / −3.5 dB.
 
-**Neighbour gain** accounts for anything that makes the neighbouring channel louder: more gain or fader, a more sensitive mic, or a pickup pattern that favours this source. It can turn a correct-looking layout into a problem, or rescue one that's too close.
+**Neighbour gain** accounts for anything that makes the neighbouring channel louder: more gain or fader, a more sensitive mic, or a pickup pattern that favours this source. It is your own estimate: the calculator doesn't know your mics or faders. It can turn a correct-looking layout into a problem, or rescue one that's too close.
 
 ## How to use it
 

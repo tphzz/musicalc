@@ -1,6 +1,6 @@
 # Note to Frequency
 
-The frequency of every note, in standard tuning or in one of 46 other tunings.
+The frequency of every note, in standard tuning or in one of 45 other tunings.
 
 ## When to use it
 
@@ -12,7 +12,7 @@ The frequency of every note, in standard tuning or in one of 46 other tunings.
 
 In standard tuning (12-TET, twelve-tone equal temperament) every semitone is the same step: the frequency rises by the factor 2^(1/12), about 1.0595, and doubles every octave. One note is fixed as the **reference**, usually A = 440 Hz, and all others follow from it.
 
-Other tunings divide the octave differently. The calculator loads them from Scala scale files and shows, for every note, how far it is from equal temperament in **cents** (100 cents = 1 semitone).
+Other tunings divide the octave differently. The tunings come from Scala scale files built into the app. Each one starts on the reference note: with A3 = 440 Hz, A is the first step of the scale, whatever key your song is in. The table shows, for every note, how far the tuning places it from equal temperament in **cents** (100 cents = 1 semitone).
 
 ## How to use it
 
@@ -23,9 +23,9 @@ Other tunings divide the octave differently. The calculator loads them from Scal
 
 ## Reading the results
 
-- Every note from C-2 to B8, with its **frequency** in Hz.
+- 132 notes from C-2 to B8 (C-1 to B9 in the C4 convention), each with its **frequency** in Hz.
 - The **cents** column shows how far the tuning places the note from equal temperament (0 in 12-TET).
-- The **MIDI** columns give the note number in both conventions (C3 = 60 and C4 = 60). MIDI note numbers only go from 0 to 127, so the highest notes show "-".
+- The **MIDI** column shows two note numbers: the usual one, where middle C is 60, and the one some devices use, where middle C is 72. MIDI note numbers end at 127, so the highest notes show "-".
 - The table opens scrolled to the reference note, which is highlighted. Every C is bold, marking the start of an octave.
 
 ## In practice
