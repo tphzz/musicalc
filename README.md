@@ -91,15 +91,14 @@ This application is provided for informational purposes only and is not guarante
 - The last setup is restored when the app starts
 - Presets for standard studio setups in the ⋮ menu: save, save as, load, rename and delete; import and export as a JSON file through the platform's own file dialog (Windows, macOS, Linux desktop portal, Android and iOS system picker)
 
-### 〰️ Phase-Safe Distance
-- Find the "sweet spots" and "death zones" for two mics on one source, e.g. a kick drum's 60 Hz fundamental
-- Frequency input with grouped source presets (Drums, Bass, Guitars, Vocals) and air temperature (°C/°F)
-- Shows the wavelength at that frequency and the speed of sound used
-- Checks a path difference between the two mics: phase offset, zone (sweet spot, partial cancellation, death zone) and how much the frequency drops when both mics are summed
-- Colour-coded zone map over two wavelengths, with the checked distance marked
-- Lists the in-phase and opposed distances and how far you can stray from a sweet spot
-- Distances in m or ft; switching converts the values
-- Source, frequency, temperature and units sit in a Setup card that folds into one line (e.g. "Drums · Kick 60 Hz · 22 °C · m"); the setup is kept between sessions
+### 〰️ Two-Mic Sum
+- Shows what mixing two mics on the same source does to the combined sound, e.g. a kick drum's close mic and a room mic
+- Main result: how much later (or earlier) Mic B arrives, in milliseconds and samples; enter the extra distance (m/ft) or a measured time (ms)
+- Mic B's level (dB) and polarity, and a delay on Mic A; **Align** fills in the delay that lines up the direct sound, **Reset** takes it away
+- Frequency-response graph of the combined level, in dB relative to Mic A alone, with the range of interest shaded and a cursor at one frequency; the graph follows the range of interest, and a dashed line shows the response before your changes
+- Lists the predicted cancellation (dips) and reinforcement (peaks) frequencies and how deep they go
+- Source presets pick a typical range of interest (Drums, Bass, Guitars, Vocals, e.g. Kick 50–100 Hz, Cymbals 3–12 kHz); temperature (°C/°F), units and sample rate sit in a Setup card that folds into one line; the setup is kept between sessions
+- States its model: the same signal reaching both mics, with a delay, level and polarity; room reflections and the mics' own response are not included, so check the mics summed in mono
 
 ### 📏 3:1 Rule
 - Checks one source reaching two mics: its own mic and a neighbouring mic

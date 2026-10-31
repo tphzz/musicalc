@@ -80,7 +80,7 @@ func main() {
 		{"Sample Len", "Sample Length", ui.ResourceSamplelengthSvg, ui.NewSampleLengthTab},
 		{"Align Dly", "Alignment Delay", ui.ResourceAlignmentdelaySvg, ui.NewAlignmentDelayTab},
 		{"Tap", "Tap Tempo", ui.ResourceTaptempoSvg, nil}, // built below: it needs the tab bar
-		{"Phase", "Phase-Safe Distance", ui.ResourcePhaseSvg, ui.NewPhaseDistanceTab},
+		{"Sum", "Two-Mic Sum", ui.ResourcePhaseSvg, ui.NewTwoMicSumTab},
 		{"3:1", "3:1 Rule", ui.ResourceThreetooneSvg, ui.NewThreeToOneTab},
 	}
 	// Mobile shows icons only (larger, in fixed-width tabs)

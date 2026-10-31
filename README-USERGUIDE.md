@@ -7,7 +7,7 @@
   - **Time & Tempo**: Timecode, Tempo to Delay, Tempo Change, Tap Tempo
   - **Frequency & Pitch**: Note to Frequency, Frequency to Note
   - **Analysis**: Sample Length
-  - **Multi-Mic**: Alignment Delay, Phase-Safe Distance, 3:1 Rule
+  - **Multi-Mic**: Alignment Delay, Two-Mic Sum, 3:1 Rule
 - The header shows where you are, e.g. `Time & Tempo / Tap Tempo`. Calculators with extra actions, like the Alignment Delay presets, show a **⋮** button on the right of the header.
 - On Android the tab bar hides while the on-screen keyboard is open and comes back when it closes.
 - Each calculator keeps its values when you switch to another one and back.
@@ -202,25 +202,30 @@ Import and export use your system's own file dialog: the Windows Open/Save dialo
 - Room L at 3 m is the reference (0 ms); Room R at 3.5 m arrives 1.46 ms (70 samples) later than the reference.
 - 22 °C, reference 4 m: Kick In at 1 m needs 8.7 ms (418 samples), Kick Out at 1.5 m 7.25 ms (348 samples).
 
-## Phase-Safe Distance
+## Two-Mic Sum
 
-When two mics pick up the same source at different distances, the farther mic hears it later. For a given frequency this delay is a phase offset: at some distances the two mics reinforce each other (**sweet spots**), at others that frequency cancels out (**death zones**). This calculator maps those distances, e.g. for a kick drum's 60 Hz fundamental.
+When two mics pick up the same source at different distances, the farther mic hears it later. Mixing them adds a delayed copy of the sound: some frequencies add up (**reinforcement**), others cancel (**cancellation**). This repeating pattern of peaks and dips is called comb filtering. This calculator shows what that does to the combined sound, and what a delay, level or polarity change would do, e.g. for a kick drum's close mic and a room mic.
+
+The model is simple on purpose: the same signal reaching both mics, Mic B delayed and at the level and polarity you set. Room reflections and the mics' own response are not included, so always check both mics summed in mono.
 
 1. **Check the Setup card**
-   - The card at the top holds **Source**, **Frequency**, **Temperature** and **Units**. The first time it starts open with a kick drum (60 Hz) at 22 °C.
-   - **Source**: pick a typical fundamental (Drums, Bass, Guitars, Vocals), or type any **Frequency** in Hz; another frequency shows "Custom".
-   - **Temperature** (°C/°F) and distance **Units** (m/ft): switching converts the values.
-   - Tap the card's header to fold it into one line, e.g. **Drums · Kick 60 Hz · 22 °C · m**, and again to open it. The setup and whether the card is open are kept when you close the app.
-2. **Read the wavelength**: e.g. 5.74 m at 60 Hz and 22 °C, with half a wavelength and the speed of sound used.
-3. **Enter the path difference**: how much farther one mic is from the source than the other.
-   - The card turns **green** (sweet spot, under 60°), **amber** (partial cancellation, 60–120°) or **red** (death zone, over 120°).
-   - It shows the phase offset and how much the frequency drops when both mics are summed.
-4. **Use the zone map**: it covers two wavelengths, shows green, amber and red ranges, and marks your path difference.
-5. **Read the zone list**: the exact in-phase distances (0, λ, 2λ) and opposed distances (½ λ, 1½ λ), and how far you may be from a sweet spot (±⅙ λ, ±60°).
+   - **Source**: picks a typical **range of interest** and a frequency for the cursor, e.g. Kick 50–100 Hz with the cursor at 60 Hz, or Cymbals 3–12 kHz. Change the **Range** or **Frequency** to anything else; the source then shows "Custom".
+   - **Temperature** (°C/°F) sets the speed of sound; **Units** (m/ft) the distance unit; **Sample rate** the sample counts.
+   - The first time the card starts open. Tap its header to fold it into one line, e.g. **Drums · Kick 50–100 Hz · 20 °C · 48 kHz**. The setup is kept when you close the app.
+2. **Describe Mic B compared with Mic A**
+   - **Farther by**: how much farther Mic B is from the source than Mic A, as a distance (m/ft) or, if you measured it, as a time in **ms**. Switching between them converts the value through the speed of sound. A negative value means Mic B is closer.
+   - **Level**: how loud Mic B is in the mix compared with Mic A, in dB (0 = equal; negative = quieter).
+   - **Polarity**: Normal or Inverted (the polarity/phase switch on the channel).
+   - **Delay on Mic A**: a delay you apply to Mic A, in ms.
+3. **Read the arrival difference**: e.g. **Mic B arrives 11.65 ms later**, 559 samples at 48 kHz. **Align** fills in that delay on Mic A to line up the direct sound; the card then says **Aligned** and **Reset** removes the delay again.
+4. **Read the graph**: the combined level over frequency, in dB relative to Mic A alone. +6 dB means both mics add up fully; deep dips mean cancellation. The range of interest is shaded, the cursor marks the selected frequency, and the line below gives the level there and the lowest and highest level within the range. The graph's frequency range follows the range of interest. After you change the level, polarity or delay, a dashed line shows the response before the change. Where the comb gets too dense to draw as a line, the graph shows the band the level swings in.
+5. **Read the predicted cancellation and reinforcement**: the first dip and peak frequencies from the graph's range on, how deep they go, and how far apart they repeat.
+6. **Use the suggestion as an option, not a rule**: it tells you which delay lines up the direct sound. Whether that sounds better is a listening decision: a room mic's later arrival can be part of the sound.
 
-**Examples** (60 Hz, 22 °C, λ = 5.74 m):
-- Path difference 0.8 m → 50°, sweet spot, −0.9 dB when summed.
-- Path difference 2.6 m → 163°, death zone, −16.6 dB when summed: move a mic or flip its polarity.
+**Examples** (Mic B 4 m farther, 20 °C, 48 kHz, Kick 50–100 Hz):
+- Equal level, normal polarity: Mic B arrives 11.65 ms (559 samples) later. At 60 Hz the sum is +1.4 dB; within 50–100 Hz it swings from −5.8 to +6.0 dB. Cancellations at 42.9 · 128.8 · 214.6 Hz, reinforcement at 85.9 · 171.7 · 257.6 Hz.
+- **Align** (Mic A delayed by 11.65 ms): +6.0 dB at every frequency; the direct sound lines up.
+- Mic B at −6 dB with inverted polarity: dips only reach −6.0 dB and peaks +3.5 dB; inverting swaps where the dips and peaks are.
 
 ## 3:1 Rule
 
