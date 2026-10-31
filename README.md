@@ -128,7 +128,6 @@ The same pages as the app's built-in help: what each calculator does, how it wor
 
 ## Documentation
 
-- **[Ideas](IDEAS.md)** - Calculators that might be added in the future
 - **[Build Instructions](build/docs/README-BUILD.md)** - How to build from source on Windows, Linux and for Android
 - **[Creating Installers](build/docs/README-INSTALLER.md)** - Creating Windows installers and Linux packages
 - **[Icon Resources](build/docs/README-ICONS.md)** - Icon specifications and resources

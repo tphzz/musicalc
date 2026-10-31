@@ -47,3 +47,7 @@ fyne-cross/*
 # Legacy local Go build/cache directories
 .gobuildtmp/
 .gocache/
+
+# Python caches
+__pycache__/
+*.py[cod]

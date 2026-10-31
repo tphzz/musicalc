@@ -123,6 +123,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 			historyList = historyList[:maxHistoryEntries]
 		}
 		historyText.SetText(strings.Join(historyList, "\n\n"))
+		historyScroll.Refresh()
 		historyScroll.ScrollToTop()
 	}
 
@@ -271,6 +272,8 @@ func NewTimecodeTab() fyne.CanvasObject {
 		timecode2Entry.SetText("")
 		historyList = []string{}
 		historyText.SetText("")
+		historyScroll.Refresh()
+		historyScroll.ScrollToTop()
 		updating = false
 		calculateTimecode1()
 		calculateTimecode2()
@@ -285,6 +288,8 @@ func NewTimecodeTab() fyne.CanvasObject {
 	clearHistoryButton := widgets.NewButton("Clear Hist.", func() {
 		historyList = []string{}
 		historyText.SetText("")
+		historyScroll.Refresh()
+		historyScroll.ScrollToTop()
 	})
 
 	// Initialize

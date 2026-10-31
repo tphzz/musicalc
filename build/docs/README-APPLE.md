@@ -5,6 +5,31 @@ Use the runner account on the Apple Silicon Mac. Workflows select
 iPhone builds target **iOS 15+** and require **Xcode 26+ / iOS 26 SDK+** for current
 App Store Connect uploads.
 
+## Repository checkout for manual commands
+
+Run the commands in this guide in a macOS terminal, using the same account that
+runs the self-hosted runner. Relative paths such as `build/scripts/...` start at
+the **public MusiCalc repository root**.
+
+If this account does not already have a checkout, create one in a directory of
+your choice, then enter it:
+
+~~~bash
+git clone --branch 0.9.0 https://github.com/tphzz/musicalc.git
+cd musicalc
+~~~
+
+If a checkout already exists, enter its root and ensure it contains the
+`0.9.0` build scripts. The helpers are tracked in the repository:
+[ios_build_number.py](../scripts/ios_build_number.py) and its imported
+[version.py](../scripts/version.py) stay together in `build/scripts/`.
+
+The persistent runner files live separately under `$HOME/.config/musicalc-ios/`:
+`config.json`, the API key directory and `build-numbers.json`. The seed command
+below creates/updates that counter JSON through `--file`; it runs the Python
+helper directly from the repository. GitHub Actions checks out the build scripts
+automatically when a workflow runs.
+
 ## Existing macOS signing
 
 Reuse the persistent login keychain:
@@ -90,13 +115,18 @@ are required.
 
 ## Seed and preserve build numbers
 
-For a brand-new app/version, explicitly seed the counter at zero:
+From that repository root, as the runner account, explicitly seed a brand-new
+app/version at zero:
 
 ~~~bash
 python3 build/scripts/ios_build_number.py \
   --file "$HOME/.config/musicalc-ios/build-numbers.json" \
   --bundle com.musicalc --version 0.9.0 --seed 0
 ~~~
+
+Seeding at zero records the starting point; the first workflow build reserves
+number **1**. For example, seeding an existing version at 12 makes its next
+reservation **13**.
 
 For an existing version, use the highest number already present in App Store
 Connect, or any higher locally reserved number, instead of zero. Seed each new

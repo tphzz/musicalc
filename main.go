@@ -3,7 +3,7 @@ package main
 import (
 	"musicalc/internal/ui"
 	"musicalc/internal/ui/widgets"
-	"strings"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -33,10 +33,8 @@ type tabInfo struct {
 
 // createCompactHeader creates a compact header with: hamburger + "category / tab heading", and on
 // the right the overflow button (⋮) for tabs with extra actions
-func createCompactHeader(window fyne.Window, categories []CategoryInfo, switchCategory func(int), headerLabel *widget.Label, actionsButton fyne.CanvasObject) *fyne.Container {
-	menuButton := widgets.NewButtonWithIcon("", theme.MenuIcon(), func() {
-		showCategoryMenu(window, categories, switchCategory)
-	})
+func createCompactHeader(showMenu func(), headerLabel *widget.Label, actionsButton fyne.CanvasObject) *fyne.Container {
+	menuButton := widgets.NewButtonWithIcon("", theme.MenuIcon(), showMenu)
 	menuButton.Importance = widget.LowImportance
 	// Truncate long "category / tab" headings instead of overflowing narrow phone screens
 	headerLabel.Truncation = fyne.TextTruncateEllipsis
@@ -60,12 +58,7 @@ func main() {
 	myApp := app.NewWithID("com.musicalc")
 	myApp.Settings().SetTheme(ui.NewCustomTheme())
 
-	ver := strings.TrimSpace(version)
-	windowTitle := "MusiCalc"
-	if ver != "" {
-		windowTitle = "MusiCalc v" + ver
-	}
-	window := myApp.NewWindow(windowTitle)
+	window := myApp.NewWindow("MusiCalc")
 	window.Resize(fyne.NewSize(450, 650))
 	window.SetFixedSize(true)
 
@@ -87,6 +80,12 @@ func main() {
 	}
 	// Mobile shows icons only (larger, in fixed-width tabs)
 	isMobile := fyne.CurrentDevice().IsMobile()
+	about := ui.NewAboutDialog(ui.DisplayVersion(version, myApp.Metadata(), isMobile), window)
+	nativeAboutMenu := runtime.GOOS == "darwin" && !isMobile
+	if nativeAboutMenu {
+		// Fyne moves the About role into the native macOS application menu.
+		window.SetMainMenu(fyne.NewMainMenu(fyne.NewMenu("MusiCalc", fyne.NewMenuItem("About", about.Show))))
+	}
 
 	categories := []CategoryInfo{
 		{Name: "Time & Tempo", TabIndices: []int{0, 1, 2, 7}},
@@ -178,11 +177,18 @@ func main() {
 		myApp.Preferences().SetInt("lastCategory", index)
 	}
 
-	header := createCompactHeader(window, categories, switchCategory, headerLabel, actionsButton)
+	var categoryAbout func()
+	if !nativeAboutMenu {
+		categoryAbout = about.Show
+	}
+	header := createCompactHeader(func() {
+		showCategoryMenu(window, categories, switchCategory, categoryAbout)
+	}, headerLabel, actionsButton)
 	// Keys typed while no field has focus: F1 opens help, Esc and the Android back button close
 	// it; other keys go to the shown tab (e.g. Space taps in Tap Tempo)
 	window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		switch {
+		case about.HandleKey(ev):
 		case helpOpen && (ev.Name == fyne.KeyEscape || ev.Name == mobile.KeyBack):
 			closeHelp()
 		case helpOpen:
@@ -206,7 +212,12 @@ func main() {
 }
 
 // showCategoryMenu displays a popup menu for category selection
-func showCategoryMenu(window fyne.Window, categories []CategoryInfo, onSelect func(int)) {
+func showCategoryMenu(window fyne.Window, categories []CategoryInfo, onSelect func(int), showAbout func()) {
+	popupMenu := widget.NewPopUpMenu(categoryMenu(categories, onSelect, showAbout), window.Canvas())
+	popupMenu.ShowAtPosition(fyne.NewPos(10, 50))
+}
+
+func categoryMenu(categories []CategoryInfo, onSelect func(int), showAbout func()) *fyne.Menu {
 	var menuItems []*fyne.MenuItem
 
 	for i, category := range categories {
@@ -216,7 +227,8 @@ func showCategoryMenu(window fyne.Window, categories []CategoryInfo, onSelect fu
 		}))
 	}
 
-	menu := fyne.NewMenu("Categories", menuItems...)
-	popupMenu := widget.NewPopUpMenu(menu, window.Canvas())
-	popupMenu.ShowAtPosition(fyne.NewPos(10, 50))
+	if showAbout != nil {
+		menuItems = append(menuItems, fyne.NewMenuItem("About MusiCalc", showAbout))
+	}
+	return fyne.NewMenu("Categories", menuItems...)
 }
