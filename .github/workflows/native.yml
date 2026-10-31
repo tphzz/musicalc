@@ -1,0 +1,99 @@
+name: 00 Full - All Platforms
+run-name: "${{ github.workflow }} | ${{ github.ref_name }}"
+on:
+  workflow_dispatch:
+    inputs:
+      notarize_macos:
+        description: "Notarize branch snapshots (mandatory for release tags)"
+        type: boolean
+        default: false
+      upload_testflight:
+        description: "Upload iPhone build after runner onboarding"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: all-platforms-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  checks:
+    uses: ./.github/workflows/native-checks.yml
+  windows-x64:
+    needs: linux-x64
+    uses: ./.github/workflows/native-platform.yml
+    with:
+      platform: windows
+      arch: amd64
+      runner_labels: '["self-hosted","Windows","X64"]'
+      host_group: native-x64-host
+  windows-arm64:
+    needs: linux-arm64
+    uses: ./.github/workflows/native-platform.yml
+    with:
+      platform: windows
+      arch: arm64
+      runner_labels: '["self-hosted","Windows","ARM64"]'
+      host_group: native-apple-silicon-host
+  linux-x64:
+    needs: checks
+    uses: ./.github/workflows/native-platform.yml
+    with:
+      platform: linux
+      arch: amd64
+      runner_labels: '["self-hosted","Linux","X64","jammy","docker"]'
+      host_group: native-x64-host
+  linux-arm64:
+    needs: checks
+    uses: ./.github/workflows/native-platform.yml
+    with:
+      platform: linux
+      arch: arm64
+      runner_labels: '["self-hosted","Linux","ARM64","jammy","docker"]'
+      host_group: native-apple-silicon-host
+  android:
+    needs: windows-x64
+    uses: ./.github/workflows/native-android-platform.yml
+  windows-installer:
+    needs: [windows-x64, windows-arm64]
+    uses: ./.github/workflows/native-windows-installer.yml
+  macos:
+    needs: windows-arm64
+    uses: ./.github/workflows/native-macos-platform.yml
+    with:
+      notarize_macos: ${{ inputs.notarize_macos }}
+  iphone:
+    needs: macos
+    uses: ./.github/workflows/native-ios-platform.yml
+    with:
+      upload_testflight: ${{ inputs.upload_testflight }}
+  draft-release:
+    if: needs.checks.outputs.release == 'true'
+    needs: [checks, linux-x64, linux-arm64, windows-installer, android, macos, iphone]
+    runs-on: [self-hosted, Linux, X64, jammy, docker]
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    concurrency:
+      group: native-x64-host
+      cancel-in-progress: false
+      queue: max
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.14"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: release-*
+          path: build/release-assets
+          merge-multiple: true
+      - name: Create or update exact-tag draft
+        run: python build/scripts/draft-release.py build/release-assets

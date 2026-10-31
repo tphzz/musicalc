@@ -1,0 +1,82 @@
+--- a/cmd/fyne/internal/mobile/build.go
++++ b/cmd/fyne/internal/mobile/build.go
+@@ -275,7 +275,7 @@
+ 	cmd.Flag.StringVar(&buildLdflags, "ldflags", "", "")
+ 	cmd.Flag.StringVar(&buildTarget, "os", "android", "")
+ 	cmd.Flag.StringVar(&buildBundleID, "bundleid", "", "")
+-	cmd.Flag.StringVar(&buildIOSVersion, "iosversion", "7.0", "")
++	cmd.Flag.StringVar(&buildIOSVersion, "iosversion", "15.0", "")
+ 	cmd.Flag.IntVar(&buildAndroidAPI, "androidapi", minAndroidAPI, "")
+ 
+ 	cmd.Flag.BoolVar(&buildA, "a", false, "")
+--- a/cmd/fyne/internal/mobile/build_iosapp.go
++++ b/cmd/fyne/internal/mobile/build_iosapp.go
+@@ -526,12 +526,12 @@
+         GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+         GCC_WARN_UNUSED_FUNCTION = YES;
+         GCC_WARN_UNUSED_VARIABLE = YES;
+-        IPHONEOS_DEPLOYMENT_TARGET = 9.0;
++        IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+         MTL_ENABLE_DEBUG_INFO = {{if .Debug}}YES{{else}}NO{{end}};
+         PRODUCT_BUNDLE_IDENTIFIER = {{.BundleID}};
+         PROVISIONING_PROFILE_SPECIFIER = "{{.Profile}}";
+         SDKROOT = iphoneos;
+-        TARGETED_DEVICE_FAMILY = "1,2";
++        TARGETED_DEVICE_FAMILY = 1;
+         VALIDATE_PRODUCT = YES;
+         {{if not .BitcodeEnabled}}ENABLE_BITCODE = NO;{{end}}
+       };
+--- a/cmd/fyne/internal/commands/package-mobile.go
++++ b/cmd/fyne/internal/commands/package-mobile.go
+@@ -62,7 +62,7 @@
+ 
+ 	appDir := filepath.Join(p.dir, mobile.AppOutputName(p.os, p.Name, p.release))
+ 	return runCmdCaptureOutput("xcrun", "actool", "Images.xcassets", "--compile", appDir, "--platform",
+-		"iphoneos", "--target-device", "iphone", "--minimum-deployment-target", "9.0", "--app-icon", "AppIcon",
++		"iphoneos", "--target-device", "iphone", "--minimum-deployment-target", "15.0", "--app-icon", "AppIcon",
+ 		"--output-format", "human-readable-text", "--output-partial-info-plist", "/dev/null")
+ }
+ 
+--- a/cmd/fyne/internal/commands/release.go
++++ b/cmd/fyne/internal/commands/release.go
+@@ -205,7 +205,7 @@
+ const fileEntitlementsPlist = "entitlements.plist"
+ 
+ func (r *Releaser) packageIOSRelease() error {
+-	team, err := mobile.DetectIOSTeamID(r.certificate)
++	_, err := mobile.DetectIOSTeamID(r.certificate)
+ 	if err != nil {
+ 		return errors.New("failed to determine team ID")
+ 	}
+@@ -219,17 +219,9 @@
+ 		return err
+ 	}
+ 
+-	cleanup, err := r.writeEntitlements(templates.EntitlementsDarwinMobile, struct{ TeamID, AppID string }{
+-		TeamID: team,
+-		AppID:  r.AppID,
+-	})
+-	if err != nil {
+-		return errors.New("failed to write entitlements plist template")
+-	}
+-	defer cleanup()
+-
+-	cmd := exec.Command("codesign", "-f", "-vv", "-s", r.certificate, "--entitlements",
+-		fileEntitlementsPlist, "Payload/"+appName+"/")
++	// Preserve the concrete distribution entitlements produced by Xcode.
++	cmd := exec.Command("codesign", "-f", "-vv", "-s", r.certificate,
++		"--preserve-metadata=entitlements", "--generate-entitlement-der", "Payload/"+appName+"/")
+ 	if err := cmd.Run(); err != nil {
+ 		fyne.LogError("Codesign failed", err)
+ 		return errors.New("unable to codesign application bundle")
+--- a/cmd/fyne/internal/commands/package.go
++++ b/cmd/fyne/internal/commands/package.go
+@@ -210,7 +210,7 @@
+ 	if pkgUtil.IsMobile(p.os) { // we don't use the normal build command for mobile so inject before gomobile...
+ 		close, err := injectMetadataIfPossible(p.dir, p.appData, createMetadataInitFile)
+ 		if err != nil {
+-			fyne.LogError("Failed to inject metadata init file, omitting metadata", err)
++			return fmt.Errorf("failed to inject mobile metadata: %w", err)
+ 		} else if close != nil {
+ 			defer close()
+ 		}

@@ -58,14 +58,10 @@ New-Item -ItemType Directory -Force $distDir | Out-Null
 Push-Location $projectRoot
 try {
     # Android needs a plain x.y.z version plus a build number that increases with every build
-    $appVersion = git describe --tags --abbrev=0 2>$null
-    if ($LASTEXITCODE -ne 0 -or $appVersion -notmatch '^\d+\.\d+\.\d+$') {
-        $appVersion = "0.0.1"
-    }
-    $appBuild = git rev-list --count HEAD
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($appBuild)) {
-        $appBuild = "1"
-    }
+    $metadata = python (Join-Path $scriptDir 'version.py') | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) { throw 'Version resolution failed' }
+    $appVersion = $metadata.marketing_version
+    $appBuild = $metadata.build
 
     Write-Host "Building APK $appVersion (build $appBuild) with tags $buildTags..."
     Get-ChildItem -Filter *.apk | Remove-Item -Force
@@ -81,7 +77,7 @@ try {
 
     # --- Align to 16 KB boundaries (Android 15+ / Google Play requirement) ---
     $unaligned = Join-Path $distDir "musicalc-unaligned.apk"
-    $aligned = Join-Path $distDir "musicalc.apk"
+    $aligned = Join-Path $distDir ("musicalc_{0}_android_arm64.apk" -f $metadata.version)
     Move-Item -Force $apk.FullName $unaligned
 
     Write-Host "Aligning APK to 16 KB boundary..."
@@ -104,15 +100,14 @@ try {
             $zip.Dispose()
         }
 
-        $loadAlign = & $readelf -lW $tmpLib | Select-String '^\s*LOAD' | ForEach-Object { ($_.Line -split '\s+')[-1] }
-        Remove-Item -Force $tmpLib
-        $bad = $loadAlign | Where-Object { [Convert]::ToInt64($_, 16) -lt 16384 }
-        if ($bad) {
-            throw "Native library LOAD segments are not 16 KB aligned: $($loadAlign -join ', ')"
+        try {
+            python (Join-Path $scriptDir 'android_alignment.py') $readelf $tmpLib
+            if ($LASTEXITCODE -ne 0) { throw "Native library alignment verification failed" }
+        } finally {
+            Remove-Item -LiteralPath $tmpLib -Force -ErrorAction SilentlyContinue
         }
-        Write-Host "Native library is 16 KB aligned ($($loadAlign -join ', '))."
     } else {
-        Write-Warning "llvm-readelf not found; skipping native library alignment check."
+        throw "llvm-readelf is required to verify native library alignment."
     }
 
     Write-Host "Build complete: $aligned ($([math]::Round((Get-Item $aligned).Length / 1MB, 1)) MB)"

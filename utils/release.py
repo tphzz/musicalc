@@ -19,7 +19,7 @@ DEFAULT_CONFIGS = [
     Path("build/release/goreleaser-win-all.yaml"),
 ]
 
-VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+VERSION_RE = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", re.ASCII)
 
 
 def find_project_root() -> Path:
@@ -61,7 +61,7 @@ def exact_version_tag(project_root: Path) -> str:
         "Reading exact Git tag",
         capture=True,
     )
-    if not VERSION_RE.match(tag):
+    if not VERSION_RE.fullmatch(tag):
         raise SystemExit(
             f"Error: release tag '{tag}' is invalid; expected MAJOR.MINOR.PATCH, for example 0.8.7"
         )

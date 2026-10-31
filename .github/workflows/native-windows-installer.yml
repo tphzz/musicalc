@@ -1,0 +1,42 @@
+name: 95 Helper - Windows installer
+on:
+  workflow_call:
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+jobs:
+  installer:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    concurrency:
+      group: native-x64-host
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.14"
+      - name: Resolve version
+        shell: pwsh
+        run: python build/scripts/version.py --github
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: release-windows-*
+          path: build/dist
+          merge-multiple: true
+      - name: Assemble dual-architecture installer
+        shell: pwsh
+        run: |
+          Copy-Item "build/dist/musicalc_${env:MUSICALC_VERSION}_windows_amd64.exe" build/dist/musicalc_x64.exe
+          Copy-Item "build/dist/musicalc_${env:MUSICALC_VERSION}_windows_arm64.exe" build/dist/musicalc_arm64.exe
+          ./build/scripts/build-installer.ps1 -Version $env:MUSICALC_VERSION -Release:($env:MUSICALC_RELEASE -eq 'true')
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-windows-installer
+          path: build/dist/installer/*.exe
+          overwrite: true
+          if-no-files-found: error
