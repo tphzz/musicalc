@@ -41,9 +41,16 @@ Fyne packaging uses **1.7.3**, with the checked-in iPhone compatibility patch.
 System compiler/mobile prerequisites are not installed by builds. See
 [Windows Python installation](#windows-python-installation) and [Apple setup](README-APPLE.md).
 
-Host concurrency groups serialize the x64 lane and the shared Apple Silicon /
-ARM64-VM lane across this repository's platform wrappers and aggregate runs.
-GitHub concurrency groups do not coordinate separate repositories.
+Manual desktop and Android platform workflows are independent, including repeated
+dispatches on the same ref. Each performs its own checks and can run concurrently
+with other dispatches when matching runners are available. Checks/build helpers do
+not impose shared host queues.
+
+The iPhone build job remains serialized and non-cancelling through its Apple host
+concurrency group across branches, aggregate runs, standalone runs and retries.
+Other platforms do not join that group. The aggregate workflow retains its explicit
+job dependency order and same-ref aggregate-run queue, without blocking independent
+platform dispatches. GitHub concurrency groups are repository-scoped.
 
 ## Windows Python installation
 

@@ -27,7 +27,6 @@ jobs:
       platform: windows
       arch: amd64
       runner_labels: '["self-hosted","Windows","X64"]'
-      host_group: native-x64-host
   windows-arm64:
     needs: linux-arm64
     uses: ./.github/workflows/native-platform.yml
@@ -35,7 +34,6 @@ jobs:
       platform: windows
       arch: arm64
       runner_labels: '["self-hosted","Windows","ARM64"]'
-      host_group: native-apple-silicon-host
   linux-x64:
     needs: checks
     uses: ./.github/workflows/native-platform.yml
@@ -43,7 +41,6 @@ jobs:
       platform: linux
       arch: amd64
       runner_labels: '["self-hosted","Linux","X64","jammy","docker"]'
-      host_group: native-x64-host
   linux-arm64:
     needs: checks
     uses: ./.github/workflows/native-platform.yml
@@ -51,7 +48,6 @@ jobs:
       platform: linux
       arch: arm64
       runner_labels: '["self-hosted","Linux","ARM64","jammy","docker"]'
-      host_group: native-apple-silicon-host
   android:
     needs: windows-x64
     uses: ./.github/workflows/native-android-platform.yml
@@ -76,10 +72,6 @@ jobs:
     permissions:
       actions: read
       contents: write
-    concurrency:
-      group: native-x64-host
-      cancel-in-progress: false
-      queue: max
     env:
       GH_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: "1"

@@ -11,9 +11,6 @@ on:
       runner_labels:
         required: true
         type: string
-      host_group:
-        required: true
-        type: string
 permissions:
   contents: read
 env:
@@ -23,10 +20,6 @@ jobs:
   build:
     runs-on: ${{ fromJSON(inputs.runner_labels) }}
     timeout-minutes: 60
-    concurrency:
-      group: ${{ inputs.host_group }}
-      cancel-in-progress: false
-      queue: max
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

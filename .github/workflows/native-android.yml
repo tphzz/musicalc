@@ -4,10 +4,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: android-${{ github.ref }}
-  cancel-in-progress: false
-  queue: max
 jobs:
   checks:
     uses: ./.github/workflows/native-checks.yml
