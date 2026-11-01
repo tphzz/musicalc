@@ -10,51 +10,80 @@
    cd musicalc
    ```
 
-2. **Install LLVM and MSYS2** (provides clang plus the MinGW linker required for Fyne)
+2. **Install the build runtimes**
+
+   Use Go **1.26.2** and Python **3.13.14**. Windows Actions use a preinstalled
+   all-users Python; see [runner setup](README-INSTALLER.md#windows-python-installation).
+
+3. **Extract Zig 0.16.0**
+
+   Download the **0.16.0** Windows archive matching the build host (x86_64 or
+   aarch64) from the [official Zig downloads](https://ziglang.org/download/).
+   Extract it, for example to `C:\tools\zig-0.16.0`. Zig supplies the C/C++
+   compiler, linker, headers and Windows target libraries for **both x64 and ARM64**.
+   See [Zig's cross-compilation and libc support](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case).
+   Separate LLVM, GCC, MSYS2, w64devkit and Visual Studio installations are not
+   required. Zig uses the GNU Windows target ABI; no external MinGW installation
+   is used. The existing Go/Fyne Cgo build does not use MSVC's compiler interface.
+
+4. **Expose Zig to the build account**
+
+   Add the directory containing `zig.exe` to the runner account's PATH. Restart
+   runner services when idle after updating their environment. For the current
+   PowerShell session:
    ```powershell
-   winget install -e --id MSYS2.MSYS2
-   winget install -e --id LLVM.LLVM
+   $env:Path = "C:\tools\zig-0.16.0;$env:Path"
+   zig version
    ```
+   The command must report `0.16.0`; build entry points reject other versions.
+   Zig caches are placed under `build/.cache` by the local/CI build scripts.
 
-3. **Install GCC via MSYS2**
-   
-   Open "MSYS2 MSYS" from Start Menu and run:
-   ```bash
-   pacman -S mingw-w64-x86_64-gcc
-   ```
-
-4. **Add MinGW to PATH**
-   
-   Add `C:\msys64\mingw64\bin` to your system PATH environment variable
-   
-   - Press `Win+R` and type `sysdm.cpl`, press Enter
-   - Go to "Advanced" tab → "Environment Variables"
-   - Edit "Path" under System variables
-   - Add new entry: `C:\msys64\mingw64\bin`
-   - Click OK and restart your terminal
-
-5. **Verify compiler installation**
-   ```powershell
-   clang --version
-   x86_64-w64-mingw32-gcc --version
-   ```
-   Both commands should output version information.
-
-6. **Install Go dependencies**
+5. **Install Go dependencies**
    ```powershell
    go mod download
    ```
 
-7. **Build the application**
+6. **Build the application**
    ```powershell
-   .\build\scripts\build-win.ps1
+   .\build\scripts\build-win.ps1 -Arch amd64
+   .\build\scripts\build-win.ps1 -Arch arm64
    ```
-   The script injects the application version from the current Git tag. If the current commit is not exactly tagged, it injects a local dev version derived from the latest tag and commit.
+   Either target can be compiled from either Windows host architecture. Outputs
+   are `build/dist/musicalc.exe` (x64) and `build/dist/musicalc_arm64.exe` (ARM64).
+   Omitting `-Arch` builds x64. Versions come from `build/scripts/version.py`:
+   exact numeric tags produce release versions; other refs produce snapshots.
+   Existing x86-64-v3 and Oryon-1 C compiler CPU settings are retained.
+   The script restores the caller's environment on success or failure and binds
+   Git metadata to the selected checkout, including submodules/worktrees on Go 1.26.
 
-8. **Run the application**
+   CI runs tests on the matching native architecture before packaging through
+   GoReleaser. Cross-compiling an EXE does not execute that target's tests.
+
+7. **Run the executable matching the machine**
    ```powershell
    .\build\dist\musicalc.exe
+   # On Windows ARM64:
+   .\build\dist\musicalc_arm64.exe
    ```
+
+### Standalone Windows executable
+
+The EXE embeds application assets/help. End users need the supported Windows OS
+and graphics driver; build tools are not runtime prerequisites. The Windows
+Universal CRT is an [OS component on Windows 10 / Server 2016 and later](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment?view=msvc-170).
+Its `api-ms-win-crt-*.dll` imports do not require shipping compiler runtime DLLs
+beside the EXE or installing a separate VC++ runtime package on supported Windows.
+
+Inspect each artifact with a PE inspection tool. For example, from a Visual Studio
+Developer PowerShell when those optional tools are available:
+```powershell
+dumpbin /DEPENDENTS build/dist/musicalc.exe
+dumpbin /DEPENDENTS build/dist/musicalc_arm64.exe
+```
+A standalone deliverable must not require adjacent third-party compiler runtime
+DLLs such as libgcc, libstdc++, libwinpthread, msys-2.0, vcruntime or msvcp.
+Import inspection covers declared imports; also smoke-test the GUI on a supported
+Windows machine without development tools and test ARM64 on a native ARM64 host.
 
 ## Linux
 
@@ -78,17 +107,12 @@
    sudo apt install gcc-aarch64-linux-gnu libasound2-dev:arm64 libgl1-mesa-dev:arm64 libx11-dev:arm64 libxrandr-dev:arm64 libxxf86vm-dev:arm64 libxi-dev:arm64 libxcursor-dev:arm64 libxinerama-dev:arm64
    ```
 
-3. **Windows AMD64 Cross-compilation support (requires a more recent Ubuntu Server version for building)**
-   ```bash
-   sudo apt-get update
-   sudo apt install gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
-   ```
+4. **Windows x64 and ARM64 cross-compilation support**
 
-4. **Windows ARM64 Cross-compilation support (requires a more recent Ubuntu Server version for building)**
-   - Download Zig from: https://ziglang.org/download/
-   - Put `zig` somewhere into your environment `PATH`
-   - Test by calling `zig` and `zig c++`
-   - The Windows GoReleaser config stores Zig cache data under `build/.cache/zig-global` and `build/.cache/zig-local` so build-generated files stay inside the project tree.
+   Extract **Zig 0.16.0** for the Linux build host from the
+   [official downloads](https://ziglang.org/download/) and put its directory on
+   PATH. `zig version` must report `0.16.0`. The same archive supplies both Windows
+   target toolchains; no separate MinGW package is needed.
 
 5. **Install Go dependencies**
    ```bash
@@ -125,15 +149,18 @@
 8. **Build the application for Windows AMD64**
    ```bash
    mkdir -p build/dist
-   export CGO_CFLAGS="-O3 -flto=auto -march=x86-64-v3 -m64"
-   export CGO_LDFLAGS="-O3 -flto=auto"
+   export CGO_CFLAGS="-O3 -mcpu=x86_64_v3"
+   export CGO_LDFLAGS="-O3"
    export CGO_ENABLED=1
-   export CC=x86_64-w64-mingw32-gcc
-   export CXX=x86_64-w64-mingw32-g++
+   export CC="zig cc -target x86_64-windows-gnu"
+   export CXX="zig c++ -target x86_64-windows-gnu"
+   export ZIG_GLOBAL_CACHE_DIR="$PWD/build/.cache/zig-global"
+   export ZIG_LOCAL_CACHE_DIR="$PWD/build/.cache/zig-local"
    export GOOS=windows
    export GOARCH=amd64
-   VERSION="$(git describe --tags --exact-match 2>/dev/null || echo dev-$(git rev-parse --short HEAD))"
-   go build -ldflags="-s -w -X main.version=${VERSION}" -o build/dist/musicalc_win_amd64.exe
+   export GOAMD64=v3
+   eval "$(python3 build/scripts/version.py --shell)"
+   go build -trimpath -ldflags="-s -w -H=windowsgui -X main.version=${MUSICALC_VERSION}" -o build/dist/musicalc_win_amd64.exe
    ```
 
 9. **Build the application for Windows ARM64**
@@ -144,12 +171,12 @@
    export CGO_ENABLED=1
    export CC="zig cc -target aarch64-windows-gnu"
    export CXX="zig c++ -target aarch64-windows-gnu"
-   export ZIG_GLOBAL_CACHE_DIR=build/.cache/zig-global
-   export ZIG_LOCAL_CACHE_DIR=build/.cache/zig-local
+   export ZIG_GLOBAL_CACHE_DIR="$PWD/build/.cache/zig-global"
+   export ZIG_LOCAL_CACHE_DIR="$PWD/build/.cache/zig-local"
    export GOOS=windows
    export GOARCH=arm64
-   VERSION="$(git describe --tags --exact-match 2>/dev/null || echo dev-$(git rev-parse --short HEAD))"
-   go build -ldflags="-s -w -X main.version=${VERSION}" -o build/dist/musicalc_win_arm64.exe
+   eval "$(python3 build/scripts/version.py --shell)"
+   go build -trimpath -ldflags="-s -w -H=windowsgui -X main.version=${MUSICALC_VERSION}" -o build/dist/musicalc_win_arm64.exe
    ```
 
 10. **Run the application**
@@ -192,5 +219,5 @@ adb install -r build\dist\musicalc.apk
 ## Requirements
 
 - Go 1.26.2 or later
-- GCC/MinGW (for CGO support on Windows)
+- Zig 0.16.0 for Windows x64/ARM64 Cgo builds; native GCC/development libraries for Linux
 - Fyne v2.8.2

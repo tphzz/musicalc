@@ -34,6 +34,49 @@ class CommandTests(unittest.TestCase):
         for call in calls:
             self.assertEqual(call.kwargs["env"]["GORELEASER_CURRENT_TAG"],"0.9.0")
 
+    def test_windows_targets_build_with_only_pinned_zig(self):
+        for arch, target in (("amd64", "x86_64"), ("arm64", "aarch64")):
+            with self.subTest(arch=arch), \
+                 patch.object(sys, "argv", ["build-platform.py", "windows", arch]), \
+                 patch.object(platform, "current", return_value=DATA), \
+                 patch.object(platform.subprocess, "check_output", side_effect=[f"windows\n{arch}\n", "0.16.0\n"]), \
+                 patch.object(platform.shutil, "which", side_effect=lambda name: "zig" if name == "zig" else None), \
+                 patch.object(platform.shutil, "copy2"), \
+                 patch.object(platform, "git", side_effect=[str(platform.ROOT / ".git"), str(platform.ROOT)]), \
+                 patch.dict(os.environ, {"GOFLAGS": ""}), \
+                 patch.object(platform, "run") as run:
+                platform.main()
+                self.assertEqual(run.call_args_list[0].args, ("go", "test", "./..."))
+                for call in run.call_args_list:
+                    env = call.kwargs["env"]
+                    self.assertEqual(env["CC"], f"zig cc -target {target}-windows-gnu")
+                    self.assertEqual(env["CXX"], f"zig c++ -target {target}-windows-gnu")
+                    self.assertEqual(env["CGO_ENABLED"], "1")
+                    self.assertEqual(env["GIT_DIR"], str(platform.ROOT / ".git"))
+                    self.assertEqual(env["GIT_WORK_TREE"], str(platform.ROOT))
+                    self.assertNotIn("mingw32-gcc", env.get("GOFLAGS", ""))
+                    self.assertTrue(Path(env["ZIG_GLOBAL_CACHE_DIR"]).is_absolute())
+                    self.assertTrue(Path(env["ZIG_LOCAL_CACHE_DIR"]).is_absolute())
+                build = run.call_args_list[-1].args
+                self.assertEqual(build[:2], ("goreleaser", "build"))
+                self.assertEqual(build[-2:], ("--id", "win-" + arch))
+
+    def test_missing_or_wrong_zig_stops_windows_before_building(self):
+        for arch in ("amd64", "arm64"):
+            for installed, version, message in ((False, "", "Missing Zig 0.16.0"),
+                                                (True, "0.15.2\n", "Expected Zig 0.16.0")):
+                with self.subTest(arch=arch, installed=installed), \
+                     patch.object(sys, "argv", ["build-platform.py", "windows", arch]), \
+                     patch.object(platform, "current", return_value=DATA), \
+                     patch.object(platform.subprocess, "check_output", side_effect=[f"windows\n{arch}\n", version]), \
+                     patch.object(platform.shutil, "which", return_value="zig" if installed else None), \
+                     patch.object(platform, "run") as run, \
+                     patch("sys.stderr") as stderr, self.assertRaises(SystemExit) as failure:
+                    platform.main()
+                self.assertEqual(failure.exception.code, 2)
+                self.assertIn(message, "".join(call.args[0] for call in stderr.write.call_args_list))
+                run.assert_not_called()
+
     def test_draft_checksum_rerun_excludes_itself(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)

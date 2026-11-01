@@ -138,7 +138,7 @@ The same pages as the app's built-in help: what each calculator does, how it wor
 ## Requirements
 
 - Go 1.26.2 or later
-- GCC/MinGW (for CGO support on Windows)
+- Zig 0.16.0 for Windows x64/ARM64 Cgo builds; GCC/development libraries for Linux
 - Fyne v2.8.2
 - For Android: Android SDK with NDK and the Fyne CLI (see the build instructions)
 

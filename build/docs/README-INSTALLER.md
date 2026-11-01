@@ -29,7 +29,7 @@ The workflows use these existing self-hosted labels:
 |---|---|---|
 | Linux x64 | self-hosted, Linux, X64, jammy, docker | GCC/G++, pkg-config, Xvfb, GL/X11/ALSA development packages |
 | Linux ARM64 | self-hosted, Linux, ARM64, jammy, docker | Native AArch64 GCC/G++, the same GUI/audio packages |
-| Windows x64 | self-hosted, Windows, X64 | LLVM clang, MinGW x64 linker, Inno Setup 6; Android SDK/NDK/JDK for APKs |
+| Windows x64 | self-hosted, Windows, X64 | Zig 0.16.0 on PATH, Inno Setup 6; Android SDK/NDK/JDK for APKs |
 | Windows ARM64 | self-hosted, Windows, ARM64 | Zig 0.16.0 on PATH |
 | Apple platforms | self-hosted, macOS, ARM64 | Selected Xcode, Rosetta for Intel test execution; Apple signing setup |
 
@@ -51,6 +51,15 @@ concurrency group across branches, aggregate runs, standalone runs and retries.
 Other platforms do not join that group. The aggregate workflow retains its explicit
 job dependency order and same-ref aggregate-run queue, without blocking independent
 platform dispatches. GitHub concurrency groups are repository-scoped.
+
+Both Windows architectures use the same pinned Zig C/C++ toolchain, including its
+Windows headers, libraries and linker. No MSYS2, w64devkit, standalone LLVM/GCC or
+Visual Studio build installation is required. See the [Windows toolchain setup](README-BUILD.md#windows)
+and [standalone EXE requirements](README-BUILD.md#standalone-windows-executable).
+The native CI helper validates Zig before tests and packaging and passes absolute
+cache paths under build/.cache to GoReleaser. The release config inherits these
+paths and the selected Git checkout from the helper. Use the build entry points
+for Go 1.26 submodule/worktree builds so VCS stamping follows that checkout.
 
 ## Windows Python installation
 

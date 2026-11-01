@@ -9,15 +9,16 @@ builds:
   - id: win-amd64
     env:
       - CGO_ENABLED=1
-      - CC=clang --target=x86_64-w64-windows-gnu
-      - CXX=clang++ --target=x86_64-w64-windows-gnu
-      - CGO_CFLAGS=-O3 -march=x86-64-v3
+      - CC=zig cc -target x86_64-windows-gnu
+      - CXX=zig c++ -target x86_64-windows-gnu
+      - CGO_CFLAGS=-O3 -mcpu=x86_64_v3
       - CGO_LDFLAGS=-O3
+    flags: [-trimpath]
     goos: [windows]
     goarch: [amd64]
     goamd64: [v3]
     ldflags:
-      - -s -w -H=windowsgui -extld=x86_64-w64-mingw32-gcc -X main.version={{ .Version }}
+      - -s -w -H=windowsgui -X main.version={{ .Version }}
     binary: musicalc_x64
     # This keeps the binary at the top level of the dist folder
     no_unique_dist_dir: true
@@ -27,10 +28,9 @@ builds:
       - CGO_ENABLED=1
       - CC=zig cc -target aarch64-windows-gnu
       - CXX=zig c++ -target aarch64-windows-gnu
-      - ZIG_GLOBAL_CACHE_DIR=build/.cache/zig-global
-      - ZIG_LOCAL_CACHE_DIR=build/.cache/zig-local
       - CGO_CFLAGS=-O3 -mcpu=oryon_1 -fomit-frame-pointer
       - CGO_LDFLAGS=-O3
+    flags: [-trimpath]
     goos: [windows]
     goarch: [arm64]
     ldflags:
