@@ -33,6 +33,8 @@ jobs:
           xcodebuild -version
           xcrun --sdk macosx --show-sdk-path
           mkdir -p build/.cache
+      - name: Test native macOS packaging commands
+        run: python3 -m unittest discover -s build/scripts -p 'test_macos*.py' -v
       - name: Build, test, sign, and package
         run: bash build/scripts/build-macos.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

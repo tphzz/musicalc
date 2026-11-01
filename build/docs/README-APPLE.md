@@ -45,6 +45,11 @@ staple it, build the ZIP/DMG, then sign/notarize/staple the DMG. Branch snapshot
 can enable notarization with the workflow input; otherwise they are unsigned
 development artifacts. Intel tests require Rosetta.
 
+The job first tests architecture verification against real universal and thin
+Mach-O fixtures. Packaging verifies ARM64 and Intel slices in separate `lipo`
+invocations because Xcode 27 rejects the combined verification form. The two
+architectures are still merged into one universal app.
+
 ~~~bash
 mkdir -p build/.cache
 bash build/scripts/build-macos.sh

@@ -31,7 +31,9 @@ for arch in arm64 amd64; do
     -ldflags="-s -w -X main.version=$MUSICALC_VERSION" -o "$work/$arch" .
 done
 lipo -create "$work/arm64" "$work/amd64" -output "$app/Contents/MacOS/MusiCalc"
-lipo "$app/Contents/MacOS/MusiCalc" -verify_arch arm64 x86_64
+# Xcode 27 requires one architecture per verification call.
+lipo "$app/Contents/MacOS/MusiCalc" -verify_arch arm64
+lipo "$app/Contents/MacOS/MusiCalc" -verify_arch x86_64
 chmod 0755 "$app/Contents/MacOS/MusiCalc"
 for size in 16 32 128 256 512; do
   sips -z "$size" "$size" icons/appicon.png --out "$work/appicon.iconset/icon_${size}x${size}.png" >/dev/null

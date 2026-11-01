@@ -110,6 +110,35 @@ PKG_CONFIG_PATH/PKG_CONFIG_LIBDIR inside that container. PKG_CONFIG_PATH adds se
 directories to the defaults; the Python directory exported by setup-python does
 not by itself remove the system search paths.
 
+## Windows disk space
+
+`NoSpaceLeft` or `Es steht nicht genug Speicherplatz auf dem Datenträger zur
+Verfügung` during compilation means the runner volume is out of writable space.
+Tests may pass before packaging fills the volume. As the normal runner account,
+inspect the affected drive, Go cache/temp locations and Windows temporary directory:
+
+~~~powershell
+Get-PSDrive -Name C | Select-Object Name,@{Name='FreeGiB';Expression={[math]::Round($_.Free/1GB,2)}}
+go env GOCACHE GOMODCACHE GOTMPDIR
+[IO.Path]::GetTempPath()
+~~~
+
+With **all jobs using those caches idle**, the runner account can remove Go's
+rebuildable compiled-package cache:
+
+~~~powershell
+go clean -cache
+~~~
+
+This leaves downloaded modules and installed tools intact. The next build recreates
+compiled cache data, so allow room for concurrent jobs rather than relying on cache
+clearing for every build. The Windows helper also stores Zig caches in each
+checkout's `build/.cache/zig-global` and `build/.cache/zig-local`. Check free space
+on that volume too; moving only Go's temporary directory does not move Zig caches.
+If necessary, relocate the runner work directory and configure Go's cache/temp
+locations on a volume with sufficient space. Package outputs remain in `build/dist`.
+There is no automatic deletion, storage threshold or concurrency restriction.
+
 ## Windows Python installation
 
 Provision Python once per Windows host, then run every runner service under its
