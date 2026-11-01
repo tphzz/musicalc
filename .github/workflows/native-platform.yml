@@ -37,7 +37,7 @@ jobs:
           python-version: "3.13.14"
       - name: Select system Python
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: powershell
         run: ./build/scripts/use-system-python.ps1 -Version "3.13.14"
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:

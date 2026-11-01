@@ -48,7 +48,9 @@ GitHub concurrency groups do not coordinate separate repositories.
 ## Windows Python installation
 
 Provision Python once per Windows host, then run every runner service under its
-normal service account. The Windows desktop, Android and installer jobs call
+normal service account. Windows workflow steps use the built-in Windows
+PowerShell 5.1 (`shell: powershell`); PowerShell 7 (`pwsh`) is not required.
+The Windows desktop, Android and installer jobs call
 `build/scripts/use-system-python.ps1 -Version "3.13.14"`. It validates the exact
 runtime version and 64-bit interpreter before adding its directory and Scripts to
 job PATH. A missing, broken, 32-bit or mismatched interpreter fails with a setup

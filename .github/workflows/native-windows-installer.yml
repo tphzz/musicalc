@@ -18,10 +18,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Select system Python
-        shell: pwsh
+        shell: powershell
         run: ./build/scripts/use-system-python.ps1 -Version "3.13.14"
       - name: Resolve version
-        shell: pwsh
+        shell: powershell
         run: python build/scripts/version.py --github
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -29,7 +29,7 @@ jobs:
           path: build/dist
           merge-multiple: true
       - name: Assemble dual-architecture installer
-        shell: pwsh
+        shell: powershell
         run: |
           Copy-Item "build/dist/musicalc_${env:MUSICALC_VERSION}_windows_amd64.exe" build/dist/musicalc_x64.exe
           Copy-Item "build/dist/musicalc_${env:MUSICALC_VERSION}_windows_arm64.exe" build/dist/musicalc_arm64.exe

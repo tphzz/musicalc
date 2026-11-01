@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Select system Python
-        shell: pwsh
+        shell: powershell
         run: ./build/scripts/use-system-python.ps1 -Version "3.13.14"
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
@@ -27,7 +27,7 @@ jobs:
       - name: Install pinned Fyne packaging CLI
         run: go install fyne.io/tools/cmd/fyne@v1.7.3
       - name: Build and verify Android APK
-        shell: pwsh
+        shell: powershell
         run: ./build/scripts/build-android.ps1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

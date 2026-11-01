@@ -13,13 +13,15 @@ HELPER = ROOT / "build/scripts/use-system-python.ps1"
 VERSION = ".".join(map(str, sys.version_info[:3]))
 
 
-@unittest.skipUnless(os.name == "nt" and shutil.which("pwsh"), "requires Windows and PowerShell 7")
+@unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "requires Windows PowerShell")
 class SystemPythonTests(unittest.TestCase):
+    shell = "powershell"
+
     def run_helper(self, root, executable, version=VERSION):
         exports = root / "github-path.txt"
         exports.write_text("existing\n", encoding="utf-8")
         result = subprocess.run(
-            ["pwsh", "-NoProfile", "-NonInteractive", "-File", str(HELPER),
+            [self.shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(HELPER),
              "-Version", version, "-PythonPath", str(executable)],
             env={**os.environ, "GITHUB_PATH": str(exports),
                  "RUNNER_TOOL_CACHE": str(root / "unusable-cache"),
@@ -58,7 +60,7 @@ class SystemPythonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="musicalc Program Files ") as temporary:
             root = Path(temporary)
             result = subprocess.run(
-                ["pwsh", "-NoProfile", "-NonInteractive", "-Command",
+                [self.shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
                  '$env:ProgramFiles = $env:MUSICALC_TEST_PROGRAMFILES; '
                  'try { & $env:MUSICALC_TEST_SELECTOR -Version "3.13.14" } '
                  'catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }'],
@@ -87,6 +89,29 @@ class SystemPythonTests(unittest.TestCase):
                 self.assertEqual(exported, ["existing"])
 
 
+@unittest.skipUnless(os.name == "nt" and shutil.which("pwsh"), "requires Windows and PowerShell 7")
+class CoreSystemPythonTests(SystemPythonTests):
+    shell = "pwsh"
+
+
+@unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "requires Windows PowerShell")
+class WindowsPowerShellSyntaxTests(unittest.TestCase):
+    def test_selected_scripts_parse_in_windows_powershell(self):
+        scripts = [ROOT / "build/scripts" / name for name in (
+            "use-system-python.ps1", "build-win.ps1", "build-android.ps1", "build-installer.ps1")]
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+             '$ErrorActionPreference = "Stop"; '
+             'foreach ($file in ($env:MUSICALC_TEST_SCRIPTS -split "[|]")) { '
+             '$tokens = $null; $errors = $null; '
+             '$null = [Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors); '
+             'if ($errors.Count) { throw ($errors | Out-String) } }'],
+            env={**os.environ, "MUSICALC_TEST_SCRIPTS": "|".join(map(str, scripts))},
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class WindowsPythonWorkflowTests(unittest.TestCase):
     def test_windows_routes_use_system_python_and_linux_keeps_setup_python(self):
         for name in ("native-platform.yml", "native-android-platform.yml", "native-windows-installer.yml"):
@@ -95,7 +120,8 @@ class WindowsPythonWorkflowTests(unittest.TestCase):
                 steps = re.split(r"(?m)^      - ", text)[1:]
                 selection = [step for step in steps if "use-system-python.ps1" in step]
                 self.assertEqual(len(selection), 1, "Windows job must select system Python")
-                self.assertIn("shell: pwsh", selection[0])
+                self.assertIn("shell: powershell", selection[0])
+                self.assertNotIn("shell: pwsh", text)
                 self.assertIn('-Version "3.13.14"', selection[0])
                 setup = [step for step in steps if "actions/setup-python@" in step]
                 if name == "native-platform.yml":

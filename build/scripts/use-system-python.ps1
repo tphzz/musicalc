@@ -15,7 +15,8 @@ if (-not (Test-Path -LiteralPath $PythonPath -PathType Leaf)) {
     throw "Install Python $Version (64-bit) for all users at '$PythonPath'. See build/docs/README-INSTALLER.md#windows-python-installation."
 }
 $PythonPath = (Resolve-Path -LiteralPath $PythonPath).Path
-$probe = 'import json, struct, sys; print(json.dumps({"version": ".".join(map(str, sys.version_info[:3])), "bits": struct.calcsize("P") * 8}))'
+# Single-quoted Python literals survive Windows PowerShell's native argument quoting.
+$probe = "import json, struct, sys; print(json.dumps({'version': '.'.join(map(str, sys.version_info[:3])), 'bits': struct.calcsize('P') * 8}))"
 try {
     $output = & $PythonPath -I -c $probe
 } catch {
