@@ -49,7 +49,9 @@ GitHub concurrency groups do not coordinate separate repositories.
 
 Provision Python once per Windows host, then run every runner service under its
 normal service account. Windows workflow steps use the built-in Windows
-PowerShell 5.1 (`shell: powershell`); PowerShell 7 (`pwsh`) is not required.
+PowerShell 5.1 (`shell: powershell`), including native tests and packaging;
+PowerShell 7 (`pwsh`) and Bash are not required by the Windows steps. Linux native
+packaging uses Bash and its quoted environment-variable syntax.
 The Windows desktop, Android and installer jobs call
 `build/scripts/use-system-python.ps1 -Version "3.13.14"`. It validates the exact
 runtime version and 64-bit interpreter before adding its directory and Scripts to
@@ -88,7 +90,7 @@ the same official release page.
 ./build/scripts/use-system-python.ps1 -Version "3.13.14"
 ~~~
 
-Git for Windows (`git` and `bash`), the native compiler and other listed tools
+Git for Windows (`git`), the native compiler and other listed tools
 must also be available to the service account. Its workspaces must be owned by
 that account. Elevated tool provisioning and ordinary checkout/build execution
 are separate operations; keep builds under the normal service account.

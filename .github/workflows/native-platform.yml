@@ -48,12 +48,20 @@ jobs:
           version: v2.15.4
       - name: Resolve version
         run: python build/scripts/version.py --github
-      - name: Native tests and packaging
+      - name: Native tests and packaging (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          BUILD_PLATFORM: ${{ inputs.platform }}
+          BUILD_ARCH: ${{ inputs.arch }}
+        run: python build/scripts/build-platform.py "$env:BUILD_PLATFORM" "$env:BUILD_ARCH"
+      - name: Native tests and packaging (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
         env:
           BUILD_PLATFORM: ${{ inputs.platform }}
           BUILD_ARCH: ${{ inputs.arch }}
         run: python build/scripts/build-platform.py "$BUILD_PLATFORM" "$BUILD_ARCH"
-        shell: bash
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-${{ inputs.platform }}-${{ inputs.arch }}
