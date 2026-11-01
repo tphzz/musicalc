@@ -3,7 +3,7 @@
 package filedialog
 
 /*
-#cgo LDFLAGS: -framework AppKit -weak_framework UniformTypeIdentifiers
+#cgo LDFLAGS: -framework AppKit -framework UniformTypeIdentifiers
 #include <stdint.h>
 #include <stdlib.h>
 
