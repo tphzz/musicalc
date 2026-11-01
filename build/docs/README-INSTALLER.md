@@ -33,14 +33,68 @@ The workflows use these existing self-hosted labels:
 | Windows ARM64 | self-hosted, Windows, ARM64 | Zig 0.16.0 on PATH |
 | Apple platforms | self-hosted, macOS, ARM64 | Selected Xcode, Rosetta for Intel test execution; Apple signing setup |
 
-Actions select Go **1.26.2**, Python **3.13.14**, and GoReleaser **2.15.4**.
+Actions select Go **1.26.2** and GoReleaser **2.15.4**. All platforms use Python
+**3.13.14**. Windows jobs select a preinstalled, all-users 64-bit Python from
+`C:\Program Files\Python313\python.exe`; they never invoke `setup-python` or
+install/repair Python during a build. Linux and Apple retain `setup-python`.
 Fyne packaging uses **1.7.3**, with the checked-in iPhone compatibility patch.
-Persistent runners fail with actionable missing-tool errors rather than installing
-system packages during each build. See [Apple setup](README-APPLE.md).
+System compiler/mobile prerequisites are not installed by builds. See
+[Windows Python installation](#windows-python-installation) and [Apple setup](README-APPLE.md).
 
 Host concurrency groups serialize the x64 lane and the shared Apple Silicon /
 ARM64-VM lane across this repository's platform wrappers and aggregate runs.
 GitHub concurrency groups do not coordinate separate repositories.
+
+## Windows Python installation
+
+Provision Python once per Windows host, then run every runner service under its
+normal service account. The Windows desktop, Android and installer jobs call
+`build/scripts/use-system-python.ps1 -Version "3.13.14"`. It validates the exact
+runtime version and 64-bit interpreter before adding its directory and Scripts to
+job PATH. A missing, broken, 32-bit or mismatched interpreter fails with a setup
+message; nothing is installed or changed in the registry by that helper. It selects
+Program Files directly, independently of user PATH and Actions tool caches.
+
+1. Wait for the Windows runners to be idle and stop their services. If Python 3.13
+   is registered to an old runner tool-cache directory, remove that installation
+   through Windows Apps & Features or its original installer as Administrator
+   before installing it in the new location. Deleting cache folders or registry
+   keys manually does not perform an uninstall.
+2. Download the [official Python 3.13.14 full installer](https://www.python.org/downloads/release/python-31314/)
+   matching the host architecture. Use Customize installation, install for all
+   users, and choose `C:\Program Files\Python313`. The full installer supports
+   [all-users installation](https://docs.python.org/3.13/using/windows.html#installation-steps).
+   For an **x64 host**, these Administrator PowerShell one-liners download, verify
+   and install the published installer:
+
+~~~powershell
+Invoke-WebRequest 'https://www.python.org/ftp/python/3.13.14/python-3.13.14-amd64.exe' -OutFile "$env:TEMP\python-3.13.14-amd64.exe"
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath "$env:TEMP\python-3.13.14-amd64.exe").Hash -ine 'c54d9b9bbb8a36e6489363ddd01139707fd781d72f1f9e90c7ec65d0061368e0') { throw 'Python installer checksum mismatch' }
+Start-Process -FilePath "$env:TEMP\python-3.13.14-amd64.exe" -ArgumentList '/quiet InstallAllUsers=1 TargetDir="C:\Program Files\Python313" PrependPath=1 Include_test=0' -Wait -PassThru -WindowStyle Hidden | Select-Object ExitCode
+~~~
+
+Installer exit 0 means success; 3010 means success with a reboot required. The
+above file/hash are x64-specific; ARM64 hosts use the ARM64 full installer from
+the same official release page.
+
+3. Verify the independent installation, then restart the normal runner services.
+   Run the selection helper from the updated public checkout as the service user
+   to check the same selection used by jobs:
+
+~~~powershell
+& 'C:\Program Files\Python313\python.exe' --version
+./build/scripts/use-system-python.ps1 -Version "3.13.14"
+~~~
+
+Git for Windows (`git` and `bash`), the native compiler and other listed tools
+must also be available to the service account. Its workspaces must be owned by
+that account. Elevated tool provisioning and ordinary checkout/build execution
+are separate operations; keep builds under the normal service account.
+
+Retry a commit containing the updated workflows. Older Windows workflows on this
+host that still call `setup-python` for 3.13 can modify the same machine-wide Python
+registration; update those workflows to the same system-Python policy too. Future
+Python pin changes require provisioning the new version once per host before use.
 
 ## Local packaging
 
