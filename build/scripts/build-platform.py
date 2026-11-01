@@ -32,10 +32,10 @@ def main():
         env["MUSICALC_SNAPSHOT_VERSION"] = data["version"]
     if args.platform == "windows":
         if not shutil.which("zig"):
-            parser.error("Missing Zig 0.16.0; add it to the runner PATH (README-BUILD.md)")
+            parser.error("Missing Zig; install 0.17.0 or 0.16.0 and add it to the runner PATH (README-BUILD.md)")
         version = subprocess.check_output(["zig", "version"], text=True).strip()
-        if version != "0.16.0":
-            parser.error(f"Expected Zig 0.16.0; found {version}")
+        if version not in ("0.16.0", "0.17.0"):
+            parser.error(f"Expected Zig 0.16.0 or 0.17.0; found {version}")
         # Go 1.26 needs an explicit Git checkout when .git is a file.
         env.update(GIT_DIR=git("rev-parse", "--absolute-git-dir"),
                    GIT_WORK_TREE=git("rev-parse", "--show-toplevel"))
@@ -45,7 +45,9 @@ def main():
                    ZIG_GLOBAL_CACHE_DIR=str(ROOT / "build/.cache/zig-global"),
                    ZIG_LOCAL_CACHE_DIR=str(ROOT / "build/.cache/zig-local"))
     else:
-        run("pkg-config", "--exists", "gl", "x11", "xcursor", "xrandr", "xinerama", "xi", "xxf86vm", "alsa")
+        run("pkg-config", "--print-errors", "--exists",
+            "gl", "x11", "xcursor", "xrandr", "xinerama", "xi", "xxf86vm", "alsa",
+            "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon")
     test = ["go", "test", "./..."]
     if args.platform == "linux":
         test = ["xvfb-run", "-a", *test]

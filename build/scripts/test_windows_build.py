@@ -63,31 +63,34 @@ exit $status
             )
 
     def test_both_targets_select_zig_and_distinct_executables(self):
-        for arch, target, filename, cpu in (
-            ("amd64", "x86_64", "musicalc.exe", "x86_64_v3"),
-            ("arm64", "aarch64", "musicalc_arm64.exe", "oryon_1"),
-        ):
-            with self.subTest(arch=arch):
-                result = self.run_builder(arch)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                data = json.loads(result.stdout)
-                self.assertEqual(data["CC"], f"zig cc -target {target}-windows-gnu")
-                self.assertEqual(data["CXX"], f"zig c++ -target {target}-windows-gnu")
-                self.assertEqual((data["GOOS"], data["GOARCH"]), ("windows", arch))
-                self.assertEqual(Path(data["GIT_DIR"]).parent, Path(data["GIT_WORK_TREE"]))
-                self.assertEqual(Path(data["GIT_DIR"]).name, ".git")
-                self.assertIn(f"-mcpu={cpu}", data["CGO_CFLAGS"])
-                self.assertEqual(Path(data["arguments"][-1]).name, filename)
-                self.assertEqual(Path(data["arguments"][-1]).parent.name, "dist")
-                self.assertNotIn("mingw32-gcc", " ".join(data["arguments"]))
-                self.assertTrue(Path(data["ZIG_GLOBAL_CACHE_DIR"]).is_absolute())
-                self.assertTrue(Path(data["ZIG_LOCAL_CACHE_DIR"]).is_absolute())
+        for zig_version in ("0.16.0", "0.17.0"):
+            for arch, target, filename, cpu in (
+                ("amd64", "x86_64", "musicalc.exe", "x86_64_v3"),
+                ("arm64", "aarch64", "musicalc_arm64.exe", "oryon_1"),
+            ):
+                with self.subTest(arch=arch, zig_version=zig_version):
+                    result = self.run_builder(arch, zig_version=zig_version)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    data = json.loads(result.stdout)
+                    self.assertEqual(data["CC"], f"zig cc -target {target}-windows-gnu")
+                    self.assertEqual(data["CXX"], f"zig c++ -target {target}-windows-gnu")
+                    self.assertEqual((data["GOOS"], data["GOARCH"]), ("windows", arch))
+                    self.assertEqual(Path(data["GIT_DIR"]).parent, Path(data["GIT_WORK_TREE"]))
+                    self.assertEqual(Path(data["GIT_DIR"]).name, ".git")
+                    self.assertIn(f"-mcpu={cpu}", data["CGO_CFLAGS"])
+                    self.assertEqual(Path(data["arguments"][-1]).name, filename)
+                    self.assertEqual(Path(data["arguments"][-1]).parent.name, "dist")
+                    self.assertNotIn("mingw32-gcc", " ".join(data["arguments"]))
+                    self.assertTrue(Path(data["ZIG_GLOBAL_CACHE_DIR"]).is_absolute())
+                    self.assertTrue(Path(data["ZIG_LOCAL_CACHE_DIR"]).is_absolute())
 
     def test_wrong_zig_version_stops_before_compilation(self):
-        result = self.run_builder("amd64", zig_version="0.15.2")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Expected Zig 0.16.0", result.stderr)
-        self.assertEqual(result.stdout.strip(), "")
+        for version in ("0.15.2", "0.18.0", "0.17.0-dev.1"):
+            with self.subTest(version=version):
+                result = self.run_builder("amd64", zig_version=version)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Expected Zig 0.16.0 or 0.17.0", result.stderr)
+                self.assertEqual(result.stdout.strip(), "")
 
     def test_failed_compilation_is_reported(self):
         result = self.run_builder("arm64", build_status=7)

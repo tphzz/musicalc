@@ -27,10 +27,10 @@ The workflows use these existing self-hosted labels:
 
 | Platform | Labels | Extra prerequisites |
 |---|---|---|
-| Linux x64 | self-hosted, Linux, X64, jammy, docker | GCC/G++, pkg-config, Xvfb, GL/X11/ALSA development packages |
-| Linux ARM64 | self-hosted, Linux, ARM64, jammy, docker | Native AArch64 GCC/G++, the same GUI/audio packages |
-| Windows x64 | self-hosted, Windows, X64 | Zig 0.16.0 on PATH, Inno Setup 6; Android SDK/NDK/JDK for APKs |
-| Windows ARM64 | self-hosted, Windows, ARM64 | Zig 0.16.0 on PATH |
+| Linux x64 | self-hosted, Linux, X64, jammy, docker | GCC/G++, pkg-config, Xvfb/xauth, GL/X11/Wayland/XKB/ALSA development packages |
+| Linux ARM64 | self-hosted, Linux, ARM64, jammy, docker | Native AArch64 GCC/G++, the same headless-test and GUI/audio packages |
+| Windows x64 | self-hosted, Windows, X64 | Zig 0.17.0 or 0.16.0 on PATH, Inno Setup 6; Android SDK/NDK/JDK for APKs |
+| Windows ARM64 | self-hosted, Windows, ARM64 | Zig 0.17.0 or 0.16.0 on PATH |
 | Apple platforms | self-hosted, macOS, ARM64 | Selected Xcode, Rosetta for Intel test execution; Apple signing setup |
 
 Actions select Go **1.26.2** and GoReleaser **2.15.4**. All platforms use Python
@@ -52,14 +52,63 @@ Other platforms do not join that group. The aggregate workflow retains its expli
 job dependency order and same-ref aggregate-run queue, without blocking independent
 platform dispatches. GitHub concurrency groups are repository-scoped.
 
-Both Windows architectures use the same pinned Zig C/C++ toolchain, including its
-Windows headers, libraries and linker. No MSYS2, w64devkit, standalone LLVM/GCC or
-Visual Studio build installation is required. See the [Windows toolchain setup](README-BUILD.md#windows)
+Both Windows architectures use the same Zig C/C++ toolchain, including its
+Windows headers, libraries and linker. The verified stable versions are 0.17.0
+(recommended) and 0.16.0; existing 0.16.0 installations remain supported. No MSYS2,
+w64devkit, standalone LLVM/GCC or Visual Studio build installation is required. See the [Windows toolchain setup](README-BUILD.md#windows)
 and [standalone EXE requirements](README-BUILD.md#standalone-windows-executable).
-The native CI helper validates Zig before tests and packaging and passes absolute
-cache paths under build/.cache to GoReleaser. The release config inherits these
+The native CI helper validates that Zig is one of these releases before tests and
+packaging and passes absolute cache paths under build/.cache to GoReleaser. The release config inherits these
 paths and the selected Git checkout from the helper. Use the build entry points
 for Go 1.26 submodule/worktree builds so VCS stamping follows that checkout.
+
+## Linux runner images
+
+The Linux jobs build natively on Ubuntu 22.04 (Jammy), one image for amd64 and one
+for arm64. Install native packages in **both runner images**. Installing packages
+only on the Docker host does not provision containers. The same unqualified package
+names select each image's native architecture; these jobs do not need multiarch
+`:arm64` packages or cross compilers.
+
+As root inside a runner image, install:
+
+~~~bash
+apt-get update && apt-get install -y build-essential pkg-config libgl1-mesa-dev xorg-dev libasound2-dev libwayland-dev libxkbcommon-dev xvfb xauth libgl1-mesa-dri
+~~~
+
+Persist this command in the image's Dockerfile as a `RUN` instruction before its
+existing switch to the unprivileged runner user. Rebuild each architecture's image
+and recreate idle runner containers from it. Installing into an existing container
+alone is temporary and is lost when that container is replaced. Builds do not run
+apt or change their host/container setup.
+
+The pinned GLFW version enables X11 and Wayland by default. The dependency check
+covers both stacks and ALSA before Go tests or packaging. It uses `--print-errors`
+so missing modules/transitive dependencies are named in the Actions log.
+
+| pkg-config module | Ubuntu development package |
+|---|---|
+| gl | libgl1-mesa-dev (provides libgl-dev) |
+| x11, xcursor, xrandr, xinerama, xi, xxf86vm | xorg-dev, including the corresponding libX development packages |
+| alsa | libasound2-dev |
+| wayland-client, wayland-cursor, wayland-egl | libwayland-dev |
+| xkbcommon | libxkbcommon-dev |
+
+Check inside the running container as its normal runner account, after provisioning:
+
+~~~bash
+pkg-config --print-errors --exists gl x11 xcursor xrandr xinerama xi xxf86vm alsa wayland-client wayland-cursor wayland-egl xkbcommon
+command -v gcc g++ xvfb-run xauth
+gcc -dumpmachine
+~~~
+
+The pkg-config command exits 0 when all modules are found. The compiler target must
+match the job's architecture; a compiler prefix alone does not supply development
+libraries. A pkg-config failure precedes compilation and is not a Go build/test
+failure. If installed modules remain undiscoverable, inspect `.pc` locations and
+PKG_CONFIG_PATH/PKG_CONFIG_LIBDIR inside that container. PKG_CONFIG_PATH adds search
+directories to the defaults; the Python directory exported by setup-python does
+not by itself remove the system search paths.
 
 ## Windows Python installation
 

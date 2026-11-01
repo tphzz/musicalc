@@ -6,11 +6,11 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Resolve-Path (Join-Path $scriptDir "..\..")
 if (-not (Get-Command zig -ErrorAction SilentlyContinue)) {
-    throw "Missing Zig 0.16.0; add it to PATH as described in README-BUILD.md."
+    throw "Missing Zig; install 0.17.0 or 0.16.0 and add it to PATH as described in README-BUILD.md."
 }
 $zigVersion = & zig version
-if ($LASTEXITCODE -ne 0 -or $zigVersion -cne "0.16.0") {
-    throw "Expected Zig 0.16.0; found '$zigVersion'."
+if ($LASTEXITCODE -ne 0 -or $zigVersion -notin @("0.16.0", "0.17.0")) {
+    throw "Expected Zig 0.16.0 or 0.17.0; found '$zigVersion'."
 }
 $distDir = Join-Path $projectRoot "build\dist"
 New-Item -ItemType Directory -Force $distDir | Out-Null

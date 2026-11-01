@@ -15,12 +15,13 @@
    Use Go **1.26.2** and Python **3.13.14**. Windows Actions use a preinstalled
    all-users Python; see [runner setup](README-INSTALLER.md#windows-python-installation).
 
-3. **Extract Zig 0.16.0**
+3. **Extract Zig 0.17.0**
 
-   Download the **0.16.0** Windows archive matching the build host (x86_64 or
+   Download the **0.17.0** Windows archive matching the build host (x86_64 or
    aarch64) from the [official Zig downloads](https://ziglang.org/download/).
-   Extract it, for example to `C:\tools\zig-0.16.0`. Zig supplies the C/C++
+   Extract it, for example to `C:\tools\zig-0.17.0`. Zig supplies the C/C++
    compiler, linker, headers and Windows target libraries for **both x64 and ARM64**.
+   **0.16.0 remains supported**; an existing installation does not need replacing.
    See [Zig's cross-compilation and libc support](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case).
    Separate LLVM, GCC, MSYS2, w64devkit and Visual Studio installations are not
    required. Zig uses the GNU Windows target ABI; no external MinGW installation
@@ -32,10 +33,11 @@
    runner services when idle after updating their environment. For the current
    PowerShell session:
    ```powershell
-   $env:Path = "C:\tools\zig-0.16.0;$env:Path"
+   $env:Path = "C:\tools\zig-0.17.0;$env:Path"
    zig version
    ```
-   The command must report `0.16.0`; build entry points reject other versions.
+   The command must report `0.17.0` or `0.16.0`. Both stable releases are verified;
+   build entry points reject unverified versions and development snapshots.
    Zig caches are placed under `build/.cache` by the local/CI build scripts.
 
 5. **Install Go dependencies**
@@ -98,20 +100,26 @@ Windows machine without development tools and test ARM64 on a native ARM64 host.
 2. **Install dependencies**
    ```bash
    sudo apt-get update
-   sudo apt-get install gcc libgl1-mesa-dev xorg-dev libasound2-dev pkg-config
+   sudo apt-get install -y build-essential pkg-config libgl1-mesa-dev xorg-dev libasound2-dev libwayland-dev libxkbcommon-dev xvfb xauth libgl1-mesa-dri
    ```
+   The pinned GLFW dependency builds X11 and Wayland support by default, so both
+   development stacks are required. Xvfb/xauth and Mesa software rendering support
+   headless native CI tests. For Docker runners, install these in each runner image;
+   packages on the Docker host are not available inside the container. See
+   [Linux runner images](README-INSTALLER.md#linux-runner-images) for verification.
+
 3. **Linux ARM64 Cross-compilation support (requires a more recent Ubuntu Server version for building)**
    ```bash
    sudo dpkg --add-architecture arm64
    sudo apt-get update
-   sudo apt install gcc-aarch64-linux-gnu libasound2-dev:arm64 libgl1-mesa-dev:arm64 libx11-dev:arm64 libxrandr-dev:arm64 libxxf86vm-dev:arm64 libxi-dev:arm64 libxcursor-dev:arm64 libxinerama-dev:arm64
+   sudo apt install gcc-aarch64-linux-gnu libasound2-dev:arm64 libgl1-mesa-dev:arm64 libx11-dev:arm64 libxrandr-dev:arm64 libxxf86vm-dev:arm64 libxi-dev:arm64 libxcursor-dev:arm64 libxinerama-dev:arm64 libwayland-dev:arm64 libxkbcommon-dev:arm64
    ```
 
 4. **Windows x64 and ARM64 cross-compilation support**
 
-   Extract **Zig 0.16.0** for the Linux build host from the
+   Extract **Zig 0.17.0** (or supported **0.16.0**) for the Linux build host from the
    [official downloads](https://ziglang.org/download/) and put its directory on
-   PATH. `zig version` must report `0.16.0`. The same archive supplies both Windows
+   PATH. `zig version` must report `0.17.0` or `0.16.0`. The same archive supplies both Windows
    target toolchains; no separate MinGW package is needed.
 
 5. **Install Go dependencies**
@@ -219,5 +227,5 @@ adb install -r build\dist\musicalc.apk
 ## Requirements
 
 - Go 1.26.2 or later
-- Zig 0.16.0 for Windows x64/ARM64 Cgo builds; native GCC/development libraries for Linux
+- Zig 0.17.0 (recommended) or 0.16.0 for Windows x64/ARM64 Cgo builds; native GCC/development libraries for Linux
 - Fyne v2.8.2
