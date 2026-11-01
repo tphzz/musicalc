@@ -64,6 +64,13 @@ func NewMenuSelect(groups []MenuGroup, onChanged func(value string)) *MenuSelect
 	return s
 }
 
+// SetGroups refreshes labels while retaining the semantic value, without an edit callback.
+func (s *MenuSelect) SetGroups(groups []MenuGroup) {
+	selected := s.selected
+	s.groups = groups
+	s.SetSelected(selected)
+}
+
 // Selected returns the value of the selected option
 func (s *MenuSelect) Selected() string {
 	return s.selected

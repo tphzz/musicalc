@@ -24,7 +24,7 @@ const (
 )
 
 // NewPage renders a help page in a vertical scroll view
-func NewPage(md string) fyne.CanvasObject {
+func NewPage(md string) *container.Scroll {
 	var scroll *container.Scroll
 	rt := newRichText(md, func() {
 		// A table changed height for a new width: lay the page out again
@@ -35,6 +35,17 @@ func NewPage(md string) fyne.CanvasObject {
 	})
 	scroll = container.NewVScroll(container.New(layout.NewCustomPaddedLayout(4, 16, 8, 8), rt))
 	return scroll
+}
+
+// RefreshPage replaces translated prose while retaining the scroll container and offset.
+func RefreshPage(page *container.Scroll, md string) {
+	offset := page.Offset
+	text := newRichText(md, func() { page.Content.Refresh(); page.Refresh() })
+	content := page.Content.(*fyne.Container)
+	content.Objects = []fyne.CanvasObject{text}
+	content.Refresh()
+	page.Offset = offset
+	page.Refresh()
 }
 
 // newRichText renders a help page's Markdown. Fyne's own segments are swapped where they don't
@@ -294,7 +305,7 @@ func (t *fitTable) Resize(size fyne.Size) {
 	t.BaseWidget.Resize(size)
 	if changed && t.relayout != nil {
 		// The height depends on the width: lay the page out again once this layout pass is done
-		go fyne.Do(t.relayout)
+		fyne.Do(t.relayout)
 	}
 }
 

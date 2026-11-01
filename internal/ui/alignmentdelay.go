@@ -2,7 +2,7 @@ package ui
 
 import (
 	"encoding/json"
-	"fmt"
+	"musicalc/internal/i18n"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,7 +21,8 @@ import (
 // temperature, reference mic, sample rate) sits in a card that folds into one summary line, so the
 // mics get most of the screen; each mic is a compact two-line card. The setup is restored when the
 // app starts again, and can be stored as presets through the header's overflow menu.
-func NewAlignmentDelayTab() fyne.CanvasObject {
+func NewAlignmentDelayTab() *View {
+	texts := newTextRefresh()
 	calc := logic.NewAlignmentDelayCalculator()
 	var refreshMics func()
 	restoring := false // a preset or the last session is being put on screen
@@ -33,30 +34,32 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 
 	// Temperature and reference distance keep their values in °C and metres, so switching a
 	// unit converts the shown number instead of re-interpreting it
-	temp := newTemperatureInput("Temperature", logic.UnitCelsius, refresh)
+	temp := newTemperatureInput(i18n.T("field.temperature"), logic.UnitCelsius, refresh)
+	texts.placeholder(temp.Entry, "field.temperature")
 	tempUnitSelect := newUnitSelect([]string{logic.UnitCelsius, logic.UnitFahrenheit}, []*unitInput{temp}, func(string) { refresh() })
 
-	ref := newDistanceInput("Distance", logic.UnitMeters, refresh)
+	ref := newDistanceInput(i18n.T("field.distance"), logic.UnitMeters, refresh)
+	texts.placeholder(ref.Entry, "field.distance")
 
 	sampleRates := []string{"44100", "48000", "88200", "96000", "192000"}
 	sampleRateSelect := widget.NewSelect(sampleRates, nil)
 	sampleRateSelect.Selected = "48000"
 
 	menuGroup := func(name string, options ...string) widgets.MenuGroup {
-		g := widgets.MenuGroup{Name: name}
+		g := widgets.MenuGroup{Name: i18n.T("source." + name)}
 		for _, o := range options {
-			g.Options = append(g.Options, widgets.MenuOption{Label: o, Value: o})
+			g.Options = append(g.Options, widgets.MenuOption{Label: i18n.T("source." + o), Value: i18n.T("source." + o)})
 		}
 		return g
 	}
 	// entryWithMenu adds a drop-down button to an entry that picks one of the options
-	entryWithMenu := func(entry *widget.Entry, groups []widgets.MenuGroup) {
+	entryWithMenu := func(entry *widget.Entry, groups func() []widgets.MenuGroup) {
 		button := widget.NewButtonWithIcon("", theme.MenuDropDownIcon(), func() {
 			c := fyne.CurrentApp().Driver().CanvasForObject(entry)
 			if c == nil {
 				return
 			}
-			menu := widgets.NewGroupedMenu(groups, entry.Text, func(_ widgets.MenuGroup, o widgets.MenuOption) {
+			menu := widgets.NewGroupedMenu(groups(), entry.Text, func(_ widgets.MenuGroup, o widgets.MenuOption) {
 				entry.SetText(o.Value)
 			})
 			widget.ShowPopUpMenuAtRelativePosition(menu, c, fyne.NewPos(0, entry.Size().Height), entry)
@@ -67,22 +70,26 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 
 	// The sound source all distances are measured from: free text or a common source
 	sourceEntry := widget.NewEntry()
-	sourceEntry.SetPlaceHolder("Source")
-	entryWithMenu(sourceEntry, []widgets.MenuGroup{
-		menuGroup("Drums", "Snare", "Kick", "Hi-Hat", "Toms"),
-		menuGroup("Instruments", "Guitar Amp", "Bass Amp", "Piano", "Vocal"),
+	texts.placeholder(sourceEntry, "field.source")
+	entryWithMenu(sourceEntry, func() []widgets.MenuGroup {
+		return []widgets.MenuGroup{
+			menuGroup("Drums", "Snare", "Kick", "Hi-Hat", "Toms"),
+			menuGroup("Instruments", "Guitar Amp", "Bass Amp", "Piano", "Vocal"),
+		}
 	})
 	sourceEntry.OnChanged = func(string) { refresh() }
 
 	// Mic name: free text, or a common position
 	micNameSelect := widget.NewEntry()
-	micNameSelect.SetPlaceHolder("Name")
-	entryWithMenu(micNameSelect, []widgets.MenuGroup{
-		menuGroup("Drums", "Kick In", "Kick Out", "Snare Top", "Snare Bottom",
-			"Hi-Hat", "Tom 1", "Tom 2", "Floor Tom"),
-		menuGroup("Overheads & Room", "Overhead L", "Overhead R", "Room L", "Room R", "Ambience"),
-		menuGroup("Instruments & Vocals", "Vocal", "Guitar Amp", "Bass Amp",
-			"Piano L", "Piano R", "Strings", "Brass"),
+	texts.placeholder(micNameSelect, "field.name")
+	entryWithMenu(micNameSelect, func() []widgets.MenuGroup {
+		return []widgets.MenuGroup{
+			menuGroup("Drums", "Kick In", "Kick Out", "Snare Top", "Snare Bottom",
+				"Hi-Hat", "Tom 1", "Tom 2", "Floor Tom"),
+			menuGroup("Overheads & Room", "Overhead L", "Overhead R", "Room L", "Room R", "Ambience"),
+			menuGroup("Instruments & Vocals", "Vocal", "Guitar Amp", "Bass Amp",
+				"Piano L", "Piano R", "Strings", "Brass"),
+		}
 	})
 
 	// New mic distance, entered in the calculator's distance unit
@@ -151,12 +158,11 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	// The labels stay visible next to the values, so the form explains itself.
 	var content *fyne.Container
 	setup := newSetupCard(container.NewVBox(
-		labeledRow("Source", sourceEntry),
-		labeledRow("Temperature", container.NewBorder(nil, nil, nil, fixedWrap(tempUnitSelect, 70), temp.Entry)),
-		labeledRow("Reference mic", container.NewBorder(nil, nil, nil, fixedWrap(distUnitSelect, 70), ref.Entry)),
-		labeledRow("Sample rate", sampleRateSelect),
-		wrappedMuted("All distances are measured from the source. The reference mic is the farthest one, "+
-			"usually a room mic; the other mics get delay to line up with it."),
+		texts.row("field.source", sourceEntry),
+		texts.row("field.temperature", container.NewBorder(nil, nil, nil, fixedWrap(tempUnitSelect, 70), temp.Entry)),
+		texts.row("field.reference_mic", container.NewBorder(nil, nil, nil, fixedWrap(distUnitSelect, 70), ref.Entry)),
+		texts.row("field.sample_rate", sampleRateSelect),
+		texts.wrappedMuted("alignment.hint"),
 	), func(bool) {
 		if content != nil {
 			content.Refresh() // the card's height changed
@@ -177,7 +183,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 			parts = append(parts, s)
 		}
 		parts = append(parts,
-			"ref "+value(ref, distUnitSelect.Selected),
+			i18n.T("alignment.reference_summary", value(ref, distUnitSelect.Selected)),
 			value(temp, tempUnitSelect.Selected),
 			logic.FormatTrim(logic.ParseFloat(sampleRateSelect.Selected)/1000, 1)+" kHz")
 		setup.SetSummary(strings.Join(parts, " · "))
@@ -196,7 +202,8 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	// Each microphone is a compact card: name and distance on the left, delay and samples on the
 	// right. The list is rebuilt on every change; it only holds a few mics.
 	micList := container.NewVBox()
-	listHeader := widgets.NewMutedText("Delay to add · estimate, check by ear")
+	var micTextRefresh []func()
+	listHeader := texts.muted("alignment.delay_title")
 	emptyHint := wrappedMuted("")
 
 	newMicCard := func(index int, mic logic.AlignmentMic) fyne.CanvasObject {
@@ -211,25 +218,23 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		})
 		removeBtn.Importance = widget.LowImportance
 
-		delayText, samplesText := logic.FormatTrim(mic.DelayMS, 2)+" ms", fmt.Sprintf("%d samples", mic.DelaySamples)
+		delayText, samplesText := logic.FormatTrim(mic.DelayMS, 2)+" ms", alignmentSamplesText(mic)
 		delayColor, samplesColor := theme.ColorNameForeground, theme.ColorNamePlaceHolder
 		switch {
 		case mic.IsReference:
-			delayText, samplesText = "0 ms", "reference"
+			delayText = "0 ms"
 			delayColor = theme.ColorNamePlaceHolder
 		case mic.IsBeyondReference:
 			// It arrives later than the reference: it would have to move earlier, not be delayed
 			delayText = minusSign(logic.FormatTrim(mic.DelayMS, 2)) + " ms"
-			samplesText = fmt.Sprintf("%d samples earlier", -mic.DelaySamples)
-			if mic.DelaySamples == -1 {
-				samplesText = "1 sample earlier"
-			}
 			delayColor, samplesColor = theme.ColorNameWarning, theme.ColorNameWarning
 		}
 		alignRight := func(o fyne.CanvasObject) fyne.CanvasObject { return container.NewBorder(nil, nil, nil, o) }
+		samplesDisplay := widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{})
+		micTextRefresh = append(micTextRefresh, func() { widgets.SetStyledText(samplesDisplay, alignmentSamplesText(mic), "") })
 		result := textLines(
 			alignRight(widgets.NewStyledText(delayText, delayColor, theme.SizeNameText, fyne.TextStyle{Bold: true})),
-			alignRight(widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{})),
+			alignRight(samplesDisplay),
 		)
 		return widgets.NewCard(container.NewBorder(nil, nil, nil,
 			container.NewHBox(result, container.NewCenter(removeBtn)),
@@ -239,10 +244,31 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 
 	// newPairHint warns that a stereo pair gets different delays
 	newPairHint := func(p logic.PairDiff) fyne.CanvasObject {
-		card := widgets.NewCard(wrappedMuted(fmt.Sprintf("%s L/R differ by %s ms. Separate delays shift the "+
-			"stereo image; use one delay for both to keep it.", p.Base, logic.FormatTrim(p.DiffMS, 2))))
+		hint := wrappedMuted(i18n.T("alignment.stereo_warning", p.Base, logic.FormatTrim(p.DiffMS, 2)))
+		micTextRefresh = append(micTextRefresh, func() {
+			widgets.SetStyledText(hint, i18n.T("alignment.stereo_warning", p.Base, logic.FormatTrim(p.DiffMS, 2)), "")
+		})
+		card := widgets.NewCard(hint)
 		card.SetOutline(theme.ColorNameWarning)
 		return card
+	}
+
+	renderSetup := func() {
+		// Name the source where distances are entered
+		from := i18n.T("source.generic")
+		if calc.Source != "" {
+			name := calc.Source
+			if i18n.Language() == "en" {
+				name = strings.ToLower(name)
+			}
+			from = i18n.T("source.named", name)
+			targetDistEntry.SetPlaceHolder(i18n.T("alignment.from", name))
+		} else {
+			targetDistEntry.SetPlaceHolder(i18n.T("field.distance"))
+		}
+		widgets.SetStyledText(emptyHint, i18n.T("alignment.add_hint", from), "")
+		updateSetupHeader()
+
 	}
 
 	refreshMics = func() {
@@ -252,16 +278,8 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		calc.SetReferenceDistance(ref.Base, logic.UnitMeters)
 		calc.Recalculate()
 
-		// Name the source where distances are entered
-		from := "the source"
-		if calc.Source != "" {
-			from = "the " + strings.ToLower(calc.Source)
-			targetDistEntry.SetPlaceHolder("From " + strings.ToLower(calc.Source))
-		} else {
-			targetDistEntry.SetPlaceHolder("Distance")
-		}
-		widgets.SetStyledText(emptyHint, "Add each mic with its distance from "+from+". The delay to add appears here.", "")
-		updateSetupHeader()
+		renderSetup()
+		micTextRefresh = nil
 
 		// Pair hints follow the second mic of their pair
 		hints := map[int]logic.PairDiff{}
@@ -288,7 +306,7 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 	addButton := widgets.NewButton("+", func() {
 		name := strings.TrimSpace(micNameSelect.Text)
 		if name == "" {
-			name = fmt.Sprintf("Mic %d", len(calc.Mics)+1)
+			name = i18n.T("alignment.mic", len(calc.Mics)+1)
 		}
 
 		dist := logic.ParseFloat(targetDistEntry.Text)
@@ -357,10 +375,31 @@ func NewAlignmentDelayTab() fyne.CanvasObject {
 		}
 		return presets.menuItems(windows[0])
 	})
-	return content
+	texts.add(func() {
+		renderSetup()
+		for _, render := range micTextRefresh {
+			render()
+		}
+	})
+
+	return texts.view(content)
 }
 
 // fixedWidthLayout sizes its object to a fixed width and the full height it is given
+
+func alignmentSamplesText(mic logic.AlignmentMic) string {
+	switch {
+	case mic.IsReference:
+		return i18n.T("alignment.reference")
+	case mic.IsBeyondReference && mic.DelaySamples == -1:
+		return i18n.T("alignment.one_earlier")
+	case mic.IsBeyondReference:
+		return i18n.T("alignment.earlier", -mic.DelaySamples)
+	default:
+		return i18n.Plural("alignment.samples", mic.DelaySamples, mic.DelaySamples)
+	}
+}
+
 type fixedWidthLayout struct {
 	width float32
 }

@@ -17,7 +17,7 @@ func TestTimecodeCompactPhoneHistory(t *testing.T) {
 	app.Settings().SetTheme(customTheme{isMobile: true})
 	w := app.NewWindow("Timecode")
 	defer w.Close()
-	content := NewTimecodeTab()
+	content := NewTimecodeTab().Content
 	w.SetContent(content)
 	w.Resize(fyne.NewSize(375, 647))
 	var entries []*widgets.TimecodeEntry

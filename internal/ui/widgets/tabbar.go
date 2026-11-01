@@ -51,6 +51,20 @@ func (t *TabBar) SetItems(items []TabBarItem, selected int) {
 	t.tabs.Refresh()
 }
 
+// SetLabels updates the existing tabs without changing selection or button identity.
+// Labels correspond to the items most recently passed to SetItems.
+func (t *TabBar) SetLabels(labels []string) {
+	for i, label := range labels {
+		if i >= len(t.tabs.Objects) {
+			break
+		}
+		button := t.tabs.Objects[i].(*tabButton)
+		button.item.Text = label
+		button.Refresh()
+	}
+	t.tabs.Refresh()
+}
+
 // Selected returns the index of the selected tab
 func (t *TabBar) Selected() int {
 	return t.selected
@@ -217,6 +231,7 @@ func (r *tabButtonRenderer) MinSize() fyne.Size {
 }
 
 func (r *tabButtonRenderer) Refresh() {
+	r.label.Text = r.button.item.Text
 	r.applyTheme()
 	r.Layout(r.button.Size())
 	canvas.Refresh(r.button)

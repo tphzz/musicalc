@@ -12,7 +12,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewTimecodeTab() fyne.CanvasObject {
+func NewTimecodeTab() *View {
+	texts := newTextRefresh()
 	// FPS format selector
 	fpsFormats := []string{}
 	for _, format := range logic.FPSFormats {
@@ -20,6 +21,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 	}
 
 	fpsSelect := widget.NewSelect(fpsFormats, nil)
+	fpsSelect.PlaceHolder = "fps" // A rate is always selected; keep its placeholder to the unit.
 	fpsSelect.SetSelected("30 fps")
 
 	// First timecode input (single field)
@@ -266,7 +268,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 	timecode2Entry.OnOperationKey = handleOperationKey
 
 	// Reset operation
-	resetButton := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetButton := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
 		updating = true
 		timecode1Entry.SetText("")
 		timecode2Entry.SetText("")
@@ -285,7 +287,7 @@ func NewTimecodeTab() fyne.CanvasObject {
 	})
 
 	// Clear History operation
-	clearHistoryButton := widgets.NewButton("Clear Hist.", func() {
+	clearHistoryButton := texts.button("timecode.clear", func() {
 		historyList = []string{}
 		historyText.SetText("")
 		historyScroll.Refresh()
@@ -325,5 +327,5 @@ func NewTimecodeTab() fyne.CanvasObject {
 		historyScroll, // center - will expand to fill remaining space
 	)
 
-	return tabContainer
+	return texts.view(tabContainer)
 }

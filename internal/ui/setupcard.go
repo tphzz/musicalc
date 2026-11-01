@@ -5,6 +5,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"musicalc/internal/i18n"
 
 	"musicalc/internal/ui/widgets"
 )
@@ -26,7 +27,7 @@ type setupCard struct {
 // folded, e.g. to lay the tab out again for the card's new height.
 func newSetupCard(body fyne.CanvasObject, onToggle func(open bool)) *setupCard {
 	c := &setupCard{
-		title:    widgets.NewStyledText("Setup", theme.ColorNameForeground, theme.SizeNameText, fyne.TextStyle{Bold: true}),
+		title:    widgets.NewStyledText(i18n.T("setup.title"), theme.ColorNameForeground, theme.SizeNameText, fyne.TextStyle{Bold: true}),
 		summary:  widgets.NewMutedText(""),
 		chevron:  widget.NewIcon(theme.MenuDropUpIcon()),
 		body:     body,

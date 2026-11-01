@@ -50,6 +50,9 @@ func NewTapPad(style TapPadStyle, title, status string, onTap func()) *TapPad {
 	return p
 }
 
+// Active reports whether a measurement is running.
+func (p *TapPad) Active() bool { return p.active }
+
 // SetActive switches between the idle and the tapping look
 func (p *TapPad) SetActive(active bool) {
 	if p.active == active {
@@ -128,8 +131,11 @@ func (p *TapPad) CreateRenderer() fyne.WidgetRenderer {
 	switch p.style {
 	case TapPadLarge:
 		dot := container.NewGridWrap(fyne.NewSquareSize(beatDotSize), r.dot)
-		r.content = container.NewCenter(container.NewVBox(
-			container.NewCenter(dot), container.NewCenter(r.title), container.NewCenter(r.status)))
+		r.title.Wrapping = fyne.TextWrapWord
+		r.status.Wrapping = fyne.TextWrapWord
+		r.title.Segments[0].(*widget.TextSegment).Style.Alignment = fyne.TextAlignCenter
+		r.status.Segments[0].(*widget.TextSegment).Style.Alignment = fyne.TextAlignCenter
+		r.content = container.NewVBox(layout.NewSpacer(), container.NewCenter(dot), r.title, r.status, layout.NewSpacer())
 	case TapPadCompact:
 		r.content = container.NewVBox(container.NewCenter(r.title), container.NewCenter(r.status))
 	default:

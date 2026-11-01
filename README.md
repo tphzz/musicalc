@@ -1,6 +1,6 @@
 # MusiCalc
 
-A cross-platform music calculator built with Go and Fyne. It provides real-time calculators for timecode, tempo, pitch, sampling and multi-mic recording, the everyday maths of music production and audio engineering. It runs on Windows, Linux and Android.
+A cross-platform music calculator built with Go and Fyne. The interface and embedded help support English and German. Preferences detects the OS language by default and lets you switch languages immediately. Desktop Preferences also provides OS-relative interface zoom. It provides real-time calculators for timecode, tempo, pitch, sampling and multi-mic recording, the everyday maths of music production and audio engineering. It runs on Windows, Linux and Android.
 
 This project is heavily inspired by [MusicMath](https://dev.laurentcolson.com/musicmath.html), an excellent tool currently exclusive to the Apple ecosystem. This version aims to bring that same utility to Windows, Linux and Android, with a simpler look and feel. For macOS users looking for a polished commercial solution, MusicMath is highly recommended. MusicMath has long been a reference tool for music-related calculations, and this project draws inspiration from that work.
 
@@ -145,3 +145,5 @@ The same pages as the app's built-in help: what each calculator does, how it wor
 ## License
 
 MIT License - See [LICENSE](LICENSE) for details.
+
+German user guide: [Orientierung](internal/ui/help/de/getting-around.md).

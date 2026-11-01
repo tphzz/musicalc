@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -16,7 +17,26 @@ func minusSign(s string) string {
 
 // labeledRow is a two-column row: a label and its control, like the other calculators
 func labeledRow(label string, control fyne.CanvasObject) fyne.CanvasObject {
-	return container.NewGridWithColumns(2, widget.NewLabel(label), control)
+	text := widget.NewLabel(label)
+	text.Wrapping = fyne.TextWrapWord
+	return container.New(&formRowLayout{}, text, control)
+}
+
+// formRowLayout keeps equal columns when they fit and gives controls their
+// required width on compact screens; the label can wrap into the remaining space.
+type formRowLayout struct{}
+
+func (*formRowLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	left, right := objects[0].MinSize(), objects[1].MinSize()
+	return fyne.NewSize(left.Width+right.Width+theme.Padding(), fyne.Max(left.Height, right.Height))
+}
+func (*formRowLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	gap := theme.Padding()
+	leftWidth := fyne.Min((size.Width-gap)/2, fyne.Max(0, size.Width-gap-objects[1].MinSize().Width))
+	objects[0].Move(fyne.NewPos(0, 0))
+	objects[0].Resize(fyne.NewSize(leftWidth, size.Height))
+	objects[1].Move(fyne.NewPos(leftWidth+gap, 0))
+	objects[1].Resize(fyne.NewSize(fyne.Max(0, size.Width-leftWidth-gap), size.Height))
 }
 
 // withSuffix puts a muted unit after a control

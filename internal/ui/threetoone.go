@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"musicalc/internal/i18n"
 	"strings"
 
 	"musicalc/internal/logic"
@@ -34,7 +35,8 @@ type threeToOneSession struct {
 
 // NewThreeToOneTab creates the 3:1 rule calculator: one source reaches its own mic and a
 // neighbouring mic; how strongly does it come through the neighbouring one, and what can be changed?
-func NewThreeToOneTab() fyne.CanvasObject {
+func NewThreeToOneTab() *View {
+	texts := newTextRefresh()
 	var update func()
 	restoring := false
 	refresh := func() {
@@ -45,10 +47,12 @@ func NewThreeToOneTab() fyne.CanvasObject {
 
 	// Setup: the source, its distance to both mics, the neighbouring channel's extra level and the target
 	source := widget.NewEntry()
-	source.SetPlaceHolder("Source")
+	texts.placeholder(source, "field.source")
 	source.OnChanged = func(string) { refresh() }
-	own := newDistanceInput("Distance", logic.UnitMeters, refresh)
-	neighbour := newDistanceInput("Distance", logic.UnitMeters, refresh)
+	own := newDistanceInput(i18n.T("field.distance"), logic.UnitMeters, refresh)
+	texts.placeholder(own.Entry, "field.distance")
+	neighbour := newDistanceInput(i18n.T("field.distance"), logic.UnitMeters, refresh)
+	texts.placeholder(neighbour.Entry, "field.distance")
 	ownSuffix, neighbourSuffix := widgets.NewMutedText(logic.UnitMeters), widgets.NewMutedText(logic.UnitMeters)
 	distUnit := newUnitSelect([]string{logic.UnitMeters, logic.UnitFeet}, []*unitInput{own, neighbour}, func(unit string) {
 		widgets.SetStyledText(ownSuffix, unit, "")
@@ -59,23 +63,23 @@ func NewThreeToOneTab() fyne.CanvasObject {
 	gain.SetPlaceHolder("0")
 	gain.OnChanged = func(string) { refresh() }
 	targetNames := make([]string, len(logic.SpillTargets))
-	for i, t := range logic.SpillTargets {
-		targetNames[i] = t.Name
+	for i, key := range []string{"target.standard", "target.ten", "target.fifteen"} {
+		targetNames[i] = i18n.T(key)
 	}
 	target := widget.NewSelect(targetNames, func(string) { refresh() })
 	target.Selected = targetNames[0]
+	texts.selectOptions(target, []string{"target.standard", "target.ten", "target.fifteen"})
 
 	var content *fyne.Container
 	var saveSession func()
 	setup := newSetupCard(container.NewVBox(
-		labeledRow("Source", source),
-		labeledRow("To its mic", withSuffix(own.Entry, ownSuffix)),
-		labeledRow("To neighbour mic", withSuffix(neighbour.Entry, neighbourSuffix)),
-		labeledRow("Neighbour gain", withSuffix(gain, widgets.NewMutedText("dB"))),
-		labeledRow("Target", target),
-		labeledRow("Units", distUnit),
-		wrappedMuted("Check one source at a time: its distance to its own mic and to the neighbouring mic. "+
-			"Neighbour gain is how much louder the neighbouring channel is (gain, sensitivity, pickup)."),
+		texts.row("field.source", source),
+		texts.row("three.own", withSuffix(own.Entry, ownSuffix)),
+		texts.row("three.neighbour", withSuffix(neighbour.Entry, neighbourSuffix)),
+		texts.row("three.gain", withSuffix(gain, widgets.NewMutedText("dB"))),
+		texts.row("three.target", target),
+		texts.row("field.units", distUnit),
+		texts.wrappedMuted("three.hint"),
 	), func(bool) {
 		if content != nil {
 			content.Refresh() // the card's height changed
@@ -119,12 +123,12 @@ func NewThreeToOneTab() fyne.CanvasObject {
 
 	// Estimated spill: the level, including the neighbouring channel's gain, against the target
 	spillTitle, spillValue := bold(theme.ColorNameSuccess), bold(theme.ColorNameSuccess)
-	widgets.SetStyledText(spillTitle, "Estimated spill", "")
+	widgets.SetStyledText(spillTitle, i18n.T("three.spill"), "")
 	spillText := plain()
 	spillCard := widgets.NewCard(vbox(
 		container.NewBorder(nil, nil, nil, spillValue, spillTitle),
 		spillText,
-		wrapped(widgets.NewMutedText("Direct sound only, assuming matched mics and the level difference above.")),
+		wrapped(texts.muted("three.model")),
 	))
 
 	// What to change, or how much room there is
@@ -148,144 +152,146 @@ func NewThreeToOneTab() fyne.CanvasObject {
 		return "+" + short
 	}
 
+	var renderResult func()
 	update = func() {
-		defer relayout()
-		defer saveSession()
 		unit := distUnit.Selected
-		dist := func(meters float64) string {
-			return logic.FormatTrim(logic.FromMeters(meters, unit), 2) + " " + unit
-		}
 		name := strings.TrimSpace(source.Text)
-		srcName, srcSentence := "the source", "The source"
-		if name != "" {
-			srcName, srcSentence = name, name
-			setup.SetTitle(name)
-		} else {
-			setup.SetTitle("Setup")
-		}
 		gainDB := logic.ParseFloat(gain.Text)
 		t := logic.SpillTargets[max(target.SelectedIndex(), 0)]
-		targetShown := logic.FormatTrim(math.Round(t.DB*10)/10, 1)
-
-		// Folded line: distances, gain, target
-		value := func(in *unitInput) string {
-			if in.Empty() {
-				return "–"
-			}
-			return logic.FormatTrim(logic.FromMeters(in.Base, unit), 2)
-		}
-		setup.SetSummary(value(own) + " / " + value(neighbour) + " " + unit + " · " + signedDB(gainDB) + " dB · ≥ " + targetShown + " dB")
-
 		r := logic.SpillCheck(own.Base, neighbour.Base, gainDB, t.DB)
-		if !r.Valid {
-			widgets.SetStyledText(ratioValue, "–", theme.ColorNamePlaceHolder)
-			widgets.SetStyledText(caption, "Enter the distances from "+srcName+" to both mics", "")
+		renderResult = func() {
+			defer relayout()
+			dist := func(meters float64) string {
+				return logic.FormatTrim(logic.FromMeters(meters, unit), 2) + " " + unit
+			}
+			srcName, srcSentence := i18n.T("source.generic"), i18n.T("source.sentence")
+			if name != "" {
+				srcName, srcSentence = name, name
+				setup.SetTitle(name)
+			} else {
+				setup.SetTitle(i18n.T("setup.title"))
+			}
+			targetShown := logic.FormatTrim(math.Round(t.DB*10)/10, 1)
+
+			// Folded line: distances, gain, target
+			value := func(in *unitInput) string {
+				if in.Empty() {
+					return "–"
+				}
+				return logic.FormatTrim(logic.FromMeters(in.Base, unit), 2)
+			}
+			setup.SetSummary(value(own) + " / " + value(neighbour) + " " + unit + " · " + signedDB(gainDB) + " dB · ≥ " + targetShown + " dB")
+
+			if !r.Valid {
+				widgets.SetStyledText(ratioValue, "–", theme.ColorNamePlaceHolder)
+				widgets.SetStyledText(caption, i18n.T("three.enter", srcName), "")
+				for _, c := range []fyne.CanvasObject{geoCard, spillCard, fixCard, combCard} {
+					c.Hide()
+				}
+				return
+			}
 			for _, c := range []fyne.CanvasObject{geoCard, spillCard, fixCard, combCard} {
-				c.Hide()
+				c.Show()
 			}
-			return
-		}
-		for _, c := range []fyne.CanvasObject{geoCard, spillCard, fixCard, combCard} {
-			c.Show()
-		}
 
-		// Ratio and distance check
-		times := logic.FormatTrim(math.Round(r.Ratio*10)/10, 1)
-		var geoColor fyne.ThemeColorName
-		switch r.Geometry {
-		case logic.GeometryMeets:
-			geoColor = theme.ColorNameSuccess
-			geoIcon.SetResource(theme.NewSuccessThemedResource(theme.ConfirmIcon()))
-			widgets.SetStyledText(geoTitle, "Meets the 3:1 guideline", geoColor)
-			widgets.SetStyledText(geoText, fmt.Sprintf("The neighbouring mic is %s times as far from %s as its own mic.", times, srcName), "")
-		case logic.GeometryThreshold:
-			geoColor = theme.ColorNameWarning
-			geoIcon.SetResource(theme.NewWarningThemedResource(theme.WarningIcon()))
-			widgets.SetStyledText(geoTitle, "At the 3:1 threshold", geoColor)
-			widgets.SetStyledText(geoText, "Meets the guideline with no room to spare: any closer and it falls below 3:1.", "")
-		default:
-			geoColor = theme.ColorNameError
-			geoIcon.SetResource(theme.NewErrorThemedResource(theme.CancelIcon()))
-			widgets.SetStyledText(geoTitle, "Below 3:1", geoColor)
-			widgets.SetStyledText(geoText, fmt.Sprintf("The neighbouring mic is only %s times as far from %s as its own mic.", times, srcName), "")
-		}
-		widgets.SetStyledText(ratioValue, fmt.Sprintf("%.1f", r.Ratio), geoColor)
-		widgets.SetStyledText(caption, "distance ratio, neighbour mic : its mic", "")
-
-		// Spill against the target
-		spillColor := theme.ColorNameSuccess
-		if !r.MeetsTarget {
-			spillColor = theme.ColorNameError
-		}
-		spillCard.SetOutline(spillColor)
-		widgets.SetStyledText(spillTitle, "Estimated spill", spillColor)
-		widgets.SetStyledText(spillValue, minusSign(fmt.Sprintf("%+.1f dB", r.SpillDB)), spillColor)
-		level := dB(r.SpillDB) + " dB below its own mic"
-		switch {
-		case math.Abs(r.SpillDB) < 0.05:
-			level = "as loud as its own mic"
-		case r.SpillDB > 0:
-			level = dB(r.SpillDB) + " dB above its own mic"
-		}
-		if r.SpillDB <= -0.05 && !r.MeetsTarget {
-			level = "only " + level // below, but not far enough
-		}
-		var vsTarget string
-		switch {
-		case math.Abs(r.MarginDB) < 0.05:
-			vsTarget = "on the " + targetShown + " dB target"
-		case r.MarginDB > 0:
-			vsTarget = dB(r.MarginDB) + " dB better than the " + targetShown + " dB target"
-		default:
-			vsTarget = dB(r.MarginDB) + " dB short of the " + targetShown + " dB target"
-			if gainDB >= 0.05 {
-				vsTarget += ", because the neighbouring channel is " + dB(gainDB) + " dB louder"
+			// Ratio and distance check
+			times := logic.FormatTrim(math.Round(r.Ratio*10)/10, 1)
+			var geoColor fyne.ThemeColorName
+			switch r.Geometry {
+			case logic.GeometryMeets:
+				geoColor = theme.ColorNameSuccess
+				geoIcon.SetResource(theme.NewSuccessThemedResource(theme.ConfirmIcon()))
+				widgets.SetStyledText(geoTitle, i18n.T("three.meets"), geoColor)
+				widgets.SetStyledText(geoText, i18n.T("three.meets_detail", times, srcName), "")
+			case logic.GeometryThreshold:
+				geoColor = theme.ColorNameWarning
+				geoIcon.SetResource(theme.NewWarningThemedResource(theme.WarningIcon()))
+				widgets.SetStyledText(geoTitle, i18n.T("three.threshold"), geoColor)
+				widgets.SetStyledText(geoText, i18n.T("three.threshold_detail"), "")
+			default:
+				geoColor = theme.ColorNameError
+				geoIcon.SetResource(theme.NewErrorThemedResource(theme.CancelIcon()))
+				widgets.SetStyledText(geoTitle, i18n.T("three.below"), geoColor)
+				widgets.SetStyledText(geoText, i18n.T("three.below_detail", times, srcName), "")
 			}
-		}
-		widgets.SetStyledText(spillText, fmt.Sprintf("%s reaches the neighbouring mic %s: %s.", srcSentence, level, vsTarget), "")
+			widgets.SetStyledText(ratioValue, fmt.Sprintf("%.1f", r.Ratio), geoColor)
+			widgets.SetStyledText(caption, i18n.T("three.ratio"), "")
 
-		// Fixes, or the room there is
-		setLines := func(lines ...string) {
-			for i, l := range fixLines {
-				if i < len(lines) {
-					widgets.SetStyledText(l, lines[i], "")
-					l.Show()
-				} else {
-					l.Hide()
+			// Spill against the target
+			spillColor := theme.ColorNameSuccess
+			if !r.MeetsTarget {
+				spillColor = theme.ColorNameError
+			}
+			spillCard.SetOutline(spillColor)
+			widgets.SetStyledText(spillTitle, i18n.T("three.spill"), spillColor)
+			widgets.SetStyledText(spillValue, minusSign(fmt.Sprintf("%+.1f dB", r.SpillDB)), spillColor)
+			level := i18n.T("three.level_below", dB(r.SpillDB))
+			switch {
+			case math.Abs(r.SpillDB) < 0.05:
+				level = i18n.T("three.level_equal")
+			case r.SpillDB > 0:
+				level = i18n.T("three.level_above", dB(r.SpillDB))
+			}
+			if r.SpillDB <= -0.05 && !r.MeetsTarget {
+				level = i18n.T("three.only", level) // below, but not far enough
+			}
+			var vsTarget string
+			switch {
+			case math.Abs(r.MarginDB) < 0.05:
+				vsTarget = i18n.T("three.on_target", targetShown)
+			case r.MarginDB > 0:
+				vsTarget = i18n.T("three.better", dB(r.MarginDB), targetShown)
+			default:
+				vsTarget = i18n.T("three.short", dB(r.MarginDB), targetShown)
+				if gainDB >= 0.05 {
+					vsTarget += i18n.T("three.because_louder", dB(gainDB))
 				}
 			}
-		}
-		closest := dist(r.MinNeighbour) // the distances went in as metres
-		if r.MeetsTarget {
-			if r.MarginDB < 0.05 {
-				widgets.SetStyledText(fixTitle, "On the target", "")
-				setLines(fmt.Sprintf("No room to spare: keep the neighbouring mic at least %s from %s.", closest, srcName),
-					"Now check each other source the same way.")
-			} else {
-				widgets.SetStyledText(fixTitle, "Room to spare", "")
-				setLines(fmt.Sprintf("The neighbouring mic may come as close as %s to %s, with the other settings unchanged.", closest, srcName),
-					"Now check each other source the same way.")
-			}
-		} else {
-			widgets.SetStyledText(fixTitle, "To reach −"+targetShown+" dB", "")
-			turnDown := "• Turn the neighbouring channel down by " + dB(r.MarginDB) + " dB. This also lowers its own source."
-			move := fmt.Sprintf("• Move the neighbouring mic to at least %s from %s.", closest, srcName)
-			aim := "• Or aim its rejection at " + srcName + ", then measure again."
-			if r.Geometry == logic.GeometryBelow {
-				setLines(move, "• Or t"+strings.TrimPrefix(turnDown, "• T"), aim)
-			} else {
-				setLines(turnDown, "• Or m"+strings.TrimPrefix(move, "• M"), aim)
-			}
-		}
+			widgets.SetStyledText(spillText, i18n.T("three.result", srcSentence, level, vsTarget), "")
 
-		// Comb filtering, stated as the condition it depends on
-		comb := "If both contributions were otherwise identical, mixing them could boost by up to +" + dB(r.CombBoostDB) + " dB and "
-		if r.CanCancel {
-			comb += "cancel completely at some frequencies."
-		} else {
-			comb += "cut by up to −" + dB(r.CombCutDB) + " dB, depending on frequency."
+			// Fixes, or the room there is
+			setLines := func(lines ...string) {
+				for i, l := range fixLines {
+					if i < len(lines) {
+						widgets.SetStyledText(l, lines[i], "")
+						l.Show()
+					} else {
+						l.Hide()
+					}
+				}
+			}
+			closest := dist(r.MinNeighbour) // the distances went in as metres
+			if r.MeetsTarget {
+				if r.MarginDB < 0.05 {
+					widgets.SetStyledText(fixTitle, i18n.T("three.on_target_title"), "")
+					setLines(i18n.T("three.no_margin", closest, srcName),
+						i18n.T("three.next_source"))
+				} else {
+					widgets.SetStyledText(fixTitle, i18n.T("three.margin"), "")
+					setLines(i18n.T("three.margin_detail", closest, srcName),
+						i18n.T("three.next_source"))
+				}
+			} else {
+				widgets.SetStyledText(fixTitle, i18n.T("three.reach", targetShown), "")
+				turnDown := i18n.T("three.turn_down", dB(r.MarginDB))
+				move := i18n.T("three.move", closest, srcName)
+				aim := i18n.T("three.aim", srcName)
+				if r.Geometry == logic.GeometryBelow {
+					setLines(move, i18n.T("three.or_turn_down", dB(r.MarginDB)), aim)
+				} else {
+					setLines(turnDown, i18n.T("three.or_move", closest, srcName), aim)
+				}
+			}
+
+			// Comb filtering, stated as the condition it depends on
+			comb := i18n.T("three.comb_cancel", dB(r.CombBoostDB))
+			if !r.CanCancel {
+				comb = i18n.T("three.comb", dB(r.CombBoostDB), dB(r.CombCutDB))
+			}
+			widgets.SetStyledText(combText, comb, "")
 		}
-		widgets.SetStyledText(combText, comb+" Listen to both mics summed in mono.", "")
+		renderResult()
+		saveSession()
 	}
 
 	saveSession = func() {
@@ -331,5 +337,10 @@ func NewThreeToOneTab() fyne.CanvasObject {
 		nil, nil, nil,
 		results,
 	)
-	return content
+	texts.add(func() {
+		if renderResult != nil {
+			renderResult()
+		}
+	})
+	return texts.view(content)
 }

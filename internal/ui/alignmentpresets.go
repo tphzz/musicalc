@@ -3,8 +3,8 @@ package ui
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image/color"
+	"musicalc/internal/i18n"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -26,7 +26,9 @@ const (
 )
 
 // presetFileFilter limits the import and export dialogs to preset files
-var presetFileFilter = filedialog.Filter{Name: "MusiCalc presets", Extensions: []string{"json"}, MIME: "application/json"}
+func presetFileFilter() filedialog.Filter {
+	return filedialog.Filter{Name: i18n.T("preset.filter"), Extensions: []string{"json"}, MIME: "application/json"}
+}
 
 // presetController keeps the stored Alignment Delay presets and runs the preset menu and dialogs
 type presetController struct {
@@ -74,7 +76,7 @@ func (c *presetController) dirty() bool {
 func (c *presetController) title() string {
 	i := c.loadedIndex()
 	if i < 0 {
-		return "Setup"
+		return i18n.T("setup.title")
 	}
 	if c.dirty() {
 		return c.presets[i].Name + "*"
@@ -85,24 +87,24 @@ func (c *presetController) title() string {
 // menuItems builds the preset entries of the overflow menu
 func (c *presetController) menuItems(win fyne.Window) []*fyne.MenuItem {
 	empty := len(c.presets) == 0
-	save := fyne.NewMenuItem("Save", c.saveLoaded)
+	save := fyne.NewMenuItem(i18n.T("action.save"), c.saveLoaded)
 	if i := c.loadedIndex(); i >= 0 {
-		save.Label = "Save “" + c.presets[i].Name + "”"
+		save.Label = i18n.T("preset.save_named", c.presets[i].Name)
 	}
 	save.Disabled = !c.dirty()
-	load := fyne.NewMenuItem("Load preset…", func() { c.showLoad(win) })
+	load := fyne.NewMenuItem(i18n.T("preset.load_menu"), func() { c.showLoad(win) })
 	load.Disabled = empty
-	manage := fyne.NewMenuItem("Manage presets…", func() { c.showManage(win) })
+	manage := fyne.NewMenuItem(i18n.T("preset.manage_menu"), func() { c.showManage(win) })
 	manage.Disabled = empty
-	export := fyne.NewMenuItem("Export presets…", func() { c.exportPresets(win) })
+	export := fyne.NewMenuItem(i18n.T("preset.export_menu"), func() { c.exportPresets(win) })
 	export.Disabled = empty
 	return []*fyne.MenuItem{
 		save,
-		fyne.NewMenuItem("Save as…", func() { c.showSaveAs(win) }),
+		fyne.NewMenuItem(i18n.T("preset.save_as"), func() { c.showSaveAs(win) }),
 		load,
 		manage,
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Import presets…", func() { c.importPresets(win) }),
+		fyne.NewMenuItem(i18n.T("preset.import_menu"), func() { c.importPresets(win) }),
 		export,
 	}
 }
@@ -160,16 +162,16 @@ func wrappedMuted(text string) *widget.RichText {
 // micCount describes the number of mics, e.g. "the 6 mics"
 func micCount(n int) string {
 	if n == 1 {
-		return "the mic"
+		return i18n.T("preset.mic.one")
 	}
-	return fmt.Sprintf("the %d mics", n)
+	return i18n.T("preset.mic.other", n)
 }
 
 // showNameDialog asks for a preset name: a full-width field, an optional explanation, and a
 // confirm button that stays disabled while validate rejects the name (the reason shows below the field)
 func showNameDialog(win fyne.Window, title, confirm, initial, info string, validate func(string) error, ok func(name string)) {
 	name := widget.NewEntry()
-	name.SetPlaceHolder("Preset name")
+	name.SetPlaceHolder(i18n.T("preset.name"))
 	name.SetText(initial)
 	problem := widgets.NewStyledText("", theme.ColorNameError, theme.SizeNameText, fyne.TextStyle{})
 	problem.Wrapping = fyne.TextWrapWord
@@ -186,7 +188,7 @@ func showNameDialog(win fyne.Window, title, confirm, initial, info string, valid
 		ok(strings.TrimSpace(name.Text))
 	})
 	confirmBtn.Importance = widget.HighImportance
-	cancelBtn := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() { d.Hide() })
+	cancelBtn := widget.NewButtonWithIcon(i18n.T("action.cancel"), theme.CancelIcon(), func() { d.Hide() })
 	check := func(s string) {
 		err := validate(s)
 		msg := ""
@@ -221,28 +223,27 @@ func showNameDialog(win fyne.Window, title, confirm, initial, info string, valid
 // showSaveAs asks for a name and saves the setup on screen as a new preset
 func (c *presetController) showSaveAs(win fyne.Window) {
 	cur := c.current()
-	source := "the source"
+	source := i18n.T("preset.source")
 	if s := strings.TrimSpace(cur.Source); s != "" {
-		source = "the source (" + s + ")"
+		source = i18n.T("preset.source_named", s)
 	}
-	info := "Saves " + source + ", reference distance, units, sample rate and " +
-		micCount(len(cur.Mics)) + ". The temperature is not saved."
+	info := i18n.T("preset.save_hint", source, micCount(len(cur.Mics)))
 	validate := func(s string) error {
 		if strings.TrimSpace(s) == "" {
-			return errors.New("enter a name")
+			return errors.New(i18n.T("preset.enter_name"))
 		}
 		return nil
 	}
-	showNameDialog(win, "Save preset", "Save", c.loaded, info, validate, func(n string) {
+	showNameDialog(win, i18n.T("preset.save_title"), i18n.T("action.save"), c.loaded, info, validate, func(n string) {
 		if i := logic.FindPreset(c.presets, n); i >= 0 && !strings.EqualFold(n, c.loaded) {
-			confirm := dialog.NewConfirm("Replace preset?", "A preset called “"+c.presets[i].Name+"” already exists. Replace it?",
+			confirm := dialog.NewConfirm(i18n.T("preset.replace_title"), i18n.T("preset.replace_hint", c.presets[i].Name),
 				func(replace bool) {
 					if replace {
 						c.saveAs(c.presets[i].Name)
 					}
 				}, win)
-			confirm.SetConfirmText("Replace")
-			confirm.SetDismissText("Cancel")
+			confirm.SetConfirmText(i18n.T("preset.replace"))
+			confirm.SetDismissText(i18n.T("action.cancel"))
 			confirm.Show()
 			return
 		}
@@ -270,7 +271,7 @@ func presetList(c *presetController, width float32, trailing func() fyne.CanvasO
 			row := o.(*fyne.Container)
 			texts := row.Objects[0].(*fyne.Container)
 			widgets.SetStyledText(texts.Objects[0].(*widget.RichText), c.presets[i].Name, "")
-			widgets.SetStyledText(texts.Objects[1].(*widget.RichText), logic.PresetSummary(c.presets[i]), "")
+			widgets.SetStyledText(texts.Objects[1].(*widget.RichText), presetSummary(c.presets[i]), "")
 			update(i, row.Objects[1])
 		},
 	)
@@ -334,9 +335,9 @@ func (c *presetController) showLoad(win fyne.Window) {
 		c.changed()
 		d.Hide()
 	}
-	d = dialog.NewCustom("Load preset", "Cancel", container.NewVBox(
+	d = dialog.NewCustom(i18n.T("preset.load_title"), i18n.T("action.cancel"), container.NewVBox(
 		sized,
-		wrappedMuted("Loading replaces the source, reference, units, sample rate and mics. The temperature stays as set."),
+		wrappedMuted(i18n.T("preset.load_hint")),
 	), win)
 	showFitted(d, win)
 }
@@ -371,9 +372,9 @@ func (c *presetController) showManage(win fyne.Window) {
 			}
 		})
 	list.OnSelected = func(i widget.ListItemID) { list.Unselect(i) }
-	d = dialog.NewCustom("Manage presets", "Close", container.NewVBox(
+	d = dialog.NewCustom(i18n.T("preset.manage_title"), i18n.T("action.close"), container.NewVBox(
 		sized,
-		wrappedMuted("Deleting a preset can't be undone; export your presets first to keep a copy."),
+		wrappedMuted(i18n.T("preset.delete_warning")),
 	), win)
 	showFitted(d, win)
 }
@@ -387,7 +388,7 @@ func (c *presetController) showRename(win fyne.Window, index int, done func()) {
 	validate := func(s string) error {
 		return logic.RenamePreset(append([]logic.Preset(nil), c.presets...), index, s)
 	}
-	showNameDialog(win, "Rename preset", "Rename", old, "", validate, func(n string) {
+	showNameDialog(win, i18n.T("preset.rename_title"), i18n.T("preset.rename"), old, "", validate, func(n string) {
 		if logic.RenamePreset(c.presets, index, n) != nil {
 			return
 		}
@@ -405,7 +406,7 @@ func (c *presetController) confirmDelete(win fyne.Window, index int, done func()
 		return
 	}
 	name := c.presets[index].Name
-	d := dialog.NewConfirm("Delete preset?", "“"+name+"” will be deleted. This can't be undone.", func(ok bool) {
+	d := dialog.NewConfirm(i18n.T("preset.delete_title"), i18n.T("preset.delete_hint", name), func(ok bool) {
 		if !ok {
 			return
 		}
@@ -416,17 +417,17 @@ func (c *presetController) confirmDelete(win fyne.Window, index int, done func()
 		c.store()
 		done()
 	}, win)
-	d.SetConfirmText("Delete")
-	d.SetDismissText("Cancel")
+	d.SetConfirmText(i18n.T("preset.delete"))
+	d.SetDismissText(i18n.T("action.cancel"))
 	d.SetConfirmImportance(widget.DangerImportance)
 	d.Show()
 }
 
 // importPresets reads presets from a file chosen in the platform's file dialog and adds them
 func (c *presetController) importPresets(win fyne.Window) {
-	filedialog.OpenFile(win, "Import presets", presetFileFilter, func(data []byte, err error) {
+	filedialog.OpenFile(win, i18n.T("preset.import_title"), presetFileFilter(), func(data []byte, err error) {
 		if err != nil {
-			dialog.ShowError(sentence(fmt.Errorf("could not read the file: %w", err)), win)
+			dialog.ShowError(sentence(errors.New(i18n.T("preset.read_error", err))), win)
 			return
 		}
 		if data == nil {
@@ -438,17 +439,17 @@ func (c *presetController) importPresets(win fyne.Window) {
 			return
 		}
 		if len(imported) == 0 {
-			dialog.ShowInformation("Import presets", "The file contains no presets.", win)
+			dialog.ShowInformation(i18n.T("preset.import_title"), i18n.T("preset.empty_file"), win)
 			return
 		}
 		var renamed []string
 		c.presets, renamed = logic.MergePresets(c.presets, imported)
 		c.store()
-		msg := fmt.Sprintf("Imported %d preset%s.", len(imported), plural(len(imported)))
+		msg := i18n.Plural("preset.imported", len(imported), len(imported))
 		if len(renamed) > 0 {
-			msg += "\nRenamed because the name was taken: " + strings.Join(renamed, ", ") + "."
+			msg += i18n.T("preset.renamed", strings.Join(renamed, ", "))
 		}
-		dialog.ShowInformation("Presets imported", msg, win)
+		dialog.ShowInformation(i18n.T("preset.imported_title"), msg, win)
 	})
 }
 
@@ -460,30 +461,23 @@ func (c *presetController) exportPresets(win fyne.Window) {
 		return
 	}
 	n := len(c.presets)
-	filedialog.SaveFile(win, "Export presets", "musicalc-presets.json", presetFileFilter, data, func(saved bool, err error) {
+	filedialog.SaveFile(win, i18n.T("preset.export_title"), "musicalc-presets.json", presetFileFilter(), data, func(saved bool, err error) {
 		if err != nil {
-			dialog.ShowError(sentence(fmt.Errorf("could not save the file: %w", err)), win)
+			dialog.ShowError(sentence(errors.New(i18n.T("preset.write_error", err))), win)
 			return
 		}
 		if saved {
-			dialog.ShowInformation("Presets exported", fmt.Sprintf("Exported %d preset%s.", n, plural(n)), win)
+			dialog.ShowInformation(i18n.T("preset.exported_title"), i18n.Plural("preset.exported", n, n), win)
 		}
 	})
 }
 
 // sentence capitalises an error message for display; Go errors start in lower case
 func sentence(err error) error {
-	msg := err.Error()
+	msg := presetErrorText(err)
 	if msg == "" {
 		return err
 	}
 	r := []rune(msg)
 	return errors.New(strings.ToUpper(string(r[0])) + string(r[1:]))
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"musicalc/internal/i18n"
 	"musicalc/internal/logic"
 	"musicalc/internal/ui/widgets"
 	"time"
@@ -22,33 +23,36 @@ var (
 	delayTempo      = binding.BindString(&delayTempoValue)
 )
 
-func NewTempoTab() fyne.CanvasObject {
+func NewTempoTab() *View {
+	texts := newTextRefresh()
 	bpm := delayTempo
 	input := widgets.NewNumericEntry()
 	input.Bind(bpm)
 	input.Validator = nil // Bind adds a conversion validator, which would show a check mark
-	input.PlaceHolder = "Tempo"
+	texts.placeholder(input, "field.tempo")
 
 	// Tap pad: each tap writes the measured tempo into the field, so the cards follow live
 	isMobile := fyne.CurrentDevice().IsMobile()
-	idleStatus, padStyle, padTitle := "or press T · resets after 2 s", widgets.TapPadInline, "Tap"
+	idleKey, padStyle, titleKey := "tap.inline_hint", widgets.TapPadInline, "tap.inline"
 	if isMobile {
-		idleStatus, padStyle, padTitle = "Tap along with the beat · resets after 2 s", widgets.TapPadCompact, "TAP"
+		idleKey, padStyle, titleKey = "tap.compact_hint", widgets.TapPadCompact, "tap.compact"
 	}
 	var tapper logic.TapTempo
+	var lastTap logic.TapResult
 	var pad *widgets.TapPad
-	pad = widgets.NewTapPad(padStyle, padTitle, idleStatus, func() {
+	pad = widgets.NewTapPad(padStyle, i18n.T(titleKey), i18n.T(idleKey), func() {
 		r := tapper.Tap(time.Now())
+		lastTap = r
 		if r.Valid {
 			_ = bpm.Set(fmt.Sprintf("%.1f", r.BPM))
-			pad.SetStatus(fmt.Sprintf("%d taps · %.1f BPM", r.Taps, r.BPM))
+			pad.SetStatus(i18n.T("tap.delay_status", r.Taps, r.BPM))
 		} else {
-			pad.SetStatus("Tap again…")
+			pad.SetStatus(i18n.T("tap.again"))
 		}
 		pad.SetActive(true)
 		whenTapsStop(&tapper, func() {
 			pad.SetActive(false)
-			pad.SetStatus(idleStatus)
+			pad.SetStatus(i18n.T(idleKey))
 		})
 	})
 
@@ -58,27 +62,27 @@ func NewTempoTab() fyne.CanvasObject {
 		Subtitle string
 		Mult     float64
 	}{
-		{"1/1", "Whole note", 4.0},
-		{"1/2", "Half note", 2.0},
-		{"1/4", "Quarter note", 1.0},
-		{"1/8", "Eighth note", 0.5},
-		{"1/16", "16th note", 0.25},
-		{"1/32", "32nd note", 0.125},
-		{"1/64", "64th note", 0.0625},
+		{"1/1", "note.whole", 4.0},
+		{"1/2", "note.half", 2.0},
+		{"1/4", "note.quarter", 1.0},
+		{"1/8", "note.eighth", 0.5},
+		{"1/16", "note.sixteenth", 0.25},
+		{"1/32", "note.thirtysecond", 0.125},
+		{"1/64", "note.sixtyfourth", 0.0625},
 	}
 	variants := []struct {
 		Name   string
 		Factor float64
 	}{
-		{"Straight", 1.0},
-		{"Dotted", 1.5},
-		{"Triplet", 2.0 / 3.0},
+		{"note.straight", 1.0},
+		{"note.dotted", 1.5},
+		{"note.triplet", 2.0 / 3.0},
 	}
 
 	// Variant labels share the width of the widest one so the delay values line up
 	var labelWidth float32
 	for _, v := range variants {
-		labelWidth = fyne.Max(labelWidth, widgets.NewMutedText(v.Name).MinSize().Width)
+		labelWidth = fyne.Max(labelWidth, widgets.NewMutedText(i18n.T(v.Name)).MinSize().Width)
 	}
 
 	// Labels draw their own inner padding; overlapping it keeps the value rows at line spacing
@@ -92,21 +96,26 @@ func NewTempoTab() fyne.CanvasObject {
 	}
 	rows := make([][]valueRow, len(groups))
 	cards := container.NewVBox()
+	var variantLabels []*widget.RichText
+	var variantWraps []*fyne.Container
 	for gi, g := range groups {
 		header := widgets.NewBaselineRow(textGap,
 			widgets.NewStyledText(g.Name, theme.ColorNameForeground, theme.SizeNameSubHeadingText, fyne.TextStyle{Bold: true}),
-			widgets.NewMutedText(g.Subtitle),
+			texts.muted(g.Subtitle),
 		)
 		content := container.New(layout.NewCustomPaddedVBoxLayout(rowGap), header)
 		for _, v := range variants {
-			name := widgets.NewMutedText(v.Name)
+			name := texts.muted(v.Name)
+			wrap := container.NewGridWrap(fyne.NewSize(labelWidth, name.MinSize().Height), name)
+			variantLabels = append(variantLabels, name)
+			variantWraps = append(variantWraps, wrap)
 			row := valueRow{
 				ms: widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Monospace: true}),
 				hz: widgets.NewMutedText(""),
 			}
 			rows[gi] = append(rows[gi], row)
 			content.Add(container.NewBorder(nil, nil,
-				container.NewGridWrap(fyne.NewSize(labelWidth, name.MinSize().Height), name),
+				wrap,
 				row.hz,
 				row.ms,
 			))
@@ -144,5 +153,25 @@ func NewTempoTab() fyne.CanvasObject {
 		}
 		return false
 	})
-	return content
+	texts.add(func() {
+		pad.SetTitle(i18n.T(titleKey))
+		switch {
+		case !pad.Active():
+			pad.SetStatus(i18n.T(idleKey))
+		case lastTap.Valid:
+			pad.SetStatus(i18n.T("tap.delay_status", lastTap.Taps, lastTap.BPM))
+		default:
+			pad.SetStatus(i18n.T("tap.again"))
+		}
+		var width float32
+		for _, label := range variantLabels {
+			width = fyne.Max(width, label.MinSize().Width)
+		}
+		for i, wrap := range variantWraps {
+			wrap.Layout = layout.NewGridWrapLayout(fyne.NewSize(width, variantLabels[i].MinSize().Height))
+			wrap.Refresh()
+		}
+	})
+
+	return texts.view(content)
 }

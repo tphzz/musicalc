@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"musicalc/internal/i18n"
 	"time"
 
 	"musicalc/internal/logic"
@@ -30,13 +31,13 @@ func whenTapsStop(t *logic.TapTempo, onIdle func()) {
 
 // NewTapTempoTab creates the Tap Tempo calculator: tap the large pad along with the beat to
 // measure the tempo. showDelay switches to Tempo to Delay after the tempo has been sent there.
-func NewTapTempoTab(showDelay func()) fyne.CanvasObject {
+func NewTapTempoTab(showDelay func()) *View {
+	texts := newTextRefresh()
 	isMobile := fyne.CurrentDevice().IsMobile()
-	idleHint, tappingHint := "Tap along with the beat", "Pause 2 s to start over"
+	idleKey, tappingKey := "tap.idle_mobile", "tap.pause_mobile"
 	if !isMobile {
-		idleHint, tappingHint = "Click or press Space along with the beat", "Pause 2 s to start over · Esc resets"
+		idleKey, tappingKey = "tap.idle_desktop", "tap.pause_desktop"
 	}
-	const idleTitle, tappingTitle = "Tap here to find the tempo", "Keep tapping…"
 
 	var tapper logic.TapTempo
 	var last logic.TapResult
@@ -45,11 +46,13 @@ func NewTapTempoTab(showDelay func()) fyne.CanvasObject {
 	// Readout: large value with a BPM unit next to it, and a status line below
 	value := widgets.NewStyledText(noTempo, theme.ColorNamePlaceHolder, widgets.SizeNameDisplayText, fyne.TextStyle{})
 	unit := widgets.NewStyledText("BPM", theme.ColorNamePlaceHolder, theme.SizeNameSubHeadingText, fyne.TextStyle{Bold: true})
-	caption := widgets.NewMutedText("Tap at least twice to measure")
+	caption := texts.muted("tap.measure")
+	caption.Wrapping = fyne.TextWrapWord
+	caption.Segments[0].(*widget.TextSegment).Style.Alignment = fyne.TextAlignCenter
 	textGap := theme.Size(theme.SizeNamePadding) - 2*theme.Size(theme.SizeNameInnerPadding)
 	readout := container.NewVBox(
 		container.NewCenter(widgets.NewBaselineRow(textGap, value, unit)),
-		container.NewCenter(caption),
+		caption,
 	)
 
 	formatTempo := func(bpm float64) string {
@@ -60,35 +63,42 @@ func NewTapTempoTab(showDelay func()) fyne.CanvasObject {
 	}
 
 	var delayBtn *widgets.Button
-	showResult := func() {
+	renderResult := func() {
 		switch {
 		case last.Valid:
 			widgets.SetStyledText(value, formatTempo(last.BPM), theme.ColorNamePrimary)
-			widgets.SetStyledText(caption, fmt.Sprintf("%d taps · ±%.1f BPM · quarter = %.1f ms",
+			widgets.SetStyledText(caption, i18n.T("tap.status",
 				last.Taps, last.Spread, 60000/last.BPM), "")
-			delayBtn.Enable()
 		case last.Taps == 1:
 			widgets.SetStyledText(value, noTempo, theme.ColorNamePlaceHolder)
-			widgets.SetStyledText(caption, "Tap again…", "")
+			widgets.SetStyledText(caption, i18n.T("tap.again"), "")
 		default:
 			widgets.SetStyledText(value, noTempo, theme.ColorNamePlaceHolder)
-			widgets.SetStyledText(caption, "Tap at least twice to measure", "")
+			widgets.SetStyledText(caption, i18n.T("tap.measure"), "")
+		}
+	}
+
+	showResult := func() {
+		renderResult()
+		if last.Valid {
+			delayBtn.Enable()
+		} else if last.Taps != 1 {
 			delayBtn.Disable()
 		}
 	}
 
-	pad := widgets.NewTapPad(widgets.TapPadLarge, idleTitle, idleHint, nil)
+	pad := widgets.NewTapPad(widgets.TapPadLarge, i18n.T("tap.title"), i18n.T(idleKey), nil)
 	tap := func() {
 		last = tapper.Tap(time.Now())
 		showResult()
 		pad.SetActive(true)
-		pad.SetTitle(tappingTitle)
-		pad.SetStatus(tappingHint)
+		pad.SetTitle(i18n.T("tap.keep_tapping"))
+		pad.SetStatus(i18n.T(tappingKey))
 		pad.Flash()
 		whenTapsStop(&tapper, func() {
 			pad.SetActive(false)
-			pad.SetTitle(idleTitle)
-			pad.SetStatus(idleHint)
+			pad.SetTitle(i18n.T("tap.title"))
+			pad.SetStatus(i18n.T(idleKey))
 		})
 	}
 	pad.OnTap = tap
@@ -98,12 +108,12 @@ func NewTapTempoTab(showDelay func()) fyne.CanvasObject {
 		last = logic.TapResult{}
 		showResult()
 		pad.SetActive(false)
-		pad.SetTitle(idleTitle)
-		pad.SetStatus(idleHint)
+		pad.SetTitle(i18n.T("tap.title"))
+		pad.SetStatus(i18n.T(idleKey))
 	}
 
 	var roundBtn *widgets.Button
-	roundBtn = widgets.NewButton("Round", func() {
+	roundBtn = texts.button("action.round", func() {
 		round = !round
 		// A filled button shows that rounding is on
 		if round {
@@ -114,7 +124,7 @@ func NewTapTempoTab(showDelay func()) fyne.CanvasObject {
 		roundBtn.Refresh()
 		showResult()
 	})
-	delayBtn = widgets.NewButtonWithIcon("Delay", theme.ContentRedoIcon(), func() {
+	delayBtn = texts.buttonWithIcon("tab.delay", theme.ContentRedoIcon(), func() {
 		if !last.Valid {
 			return
 		}
@@ -123,7 +133,7 @@ func NewTapTempoTab(showDelay func()) fyne.CanvasObject {
 			showDelay()
 		}
 	})
-	resetBtn := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), reset)
+	resetBtn := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), reset)
 	showResult()
 
 	content := container.NewBorder(
@@ -143,5 +153,15 @@ func NewTapTempoTab(showDelay func()) fyne.CanvasObject {
 		}
 		return true
 	})
-	return content
+	texts.add(func() {
+		renderResult()
+		if pad.Active() {
+			pad.SetTitle(i18n.T("tap.keep_tapping"))
+			pad.SetStatus(i18n.T(tappingKey))
+		} else {
+			pad.SetTitle(i18n.T("tap.title"))
+			pad.SetStatus(i18n.T(idleKey))
+		}
+	})
+	return texts.view(content)
 }

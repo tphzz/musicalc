@@ -7,16 +7,16 @@ import (
 	"musicalc/internal/ui/widgets"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewFrequencyToNoteTab() fyne.CanvasObject {
+func NewFrequencyToNoteTab() *View {
+	texts := newTextRefresh()
 	// Input field
 	frequencyEntry := widgets.NewNumericEntry()
-	frequencyEntry.SetPlaceHolder("Frequency")
+	texts.placeholder(frequencyEntry, "field.frequency")
 	frequencyEntry.SetText("440")
 
 	// Middle C convention selector (radio buttons)
@@ -134,7 +134,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Play button - generates sine wave tone
-	playButton := widgets.NewButtonWithIcon("Play", theme.MediaPlayIcon(), func() {
+	playButton := texts.buttonWithIcon("action.play", theme.MediaPlayIcon(), func() {
 		freq := logic.ParseFloat(frequencyEntry.Text)
 		if freq > 0 && freq < 20000 {
 			go audio.PlayFrequency(freq, 3*time.Second)
@@ -142,7 +142,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Reset button
-	resetButton := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetButton := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
 		frequencyEntry.SetText("440")
 		middleCRadio.SetSelected("C3")
 	})
@@ -150,17 +150,14 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	// Initialize with default frequency (A4 = 440.00 Hz)
 	calculateFromFrequency()
 
-	return container.NewVBox(
+	return texts.view(container.NewVBox(
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Frequency (Hz)"),
+			texts.label("field.frequency_hz"),
 			frequencyEntry,
 		),
+		texts.row("field.quickselect", container.NewHBox(c3Button, a3Button, c4Button, a4Button)),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Quickselect"),
-			container.NewHBox(c3Button, a3Button, c4Button, a4Button),
-		),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Middle C"),
+			texts.label("field.middle_c"),
 			middleCRadio,
 		),
 		container.NewGridWithColumns(2,
@@ -169,21 +166,21 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		),
 		widget.NewSeparator(),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Note"),
+			texts.label("field.note"),
 			note100Label,
 		),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Cents"),
+			texts.label("field.cents"),
 			cents100Label,
 		),
 		widget.NewSeparator(),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Note (50¢n)"),
+			texts.label("field.note50"),
 			note50Label,
 		),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Cents (50¢n)"),
+			texts.label("field.cents50"),
 			cents50Label,
 		),
-	)
+	))
 }

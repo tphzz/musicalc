@@ -7,10 +7,12 @@ import (
 	"embed"
 	"strings"
 
+	"musicalc/internal/i18n"
+
 	"fyne.io/fyne/v2"
 )
 
-//go:embed *.md images/*.png
+//go:embed *.md de/*.md images/*.png
 var files embed.FS
 
 // Page is one help page
@@ -39,9 +41,17 @@ var Pages = []Page{
 
 // Source returns a page's Markdown as written, or "" when there is no such page
 func Source(id string) string {
-	data, err := files.ReadFile(id + ".md")
-	if err != nil {
-		return ""
+	return SourceForLanguage(id, "en")
+}
+
+// SourceForLanguage returns localized help, with English as the fallback.
+func SourceForLanguage(id, language string) string {
+	var data []byte
+	if language == "de" {
+		data, _ = files.ReadFile("de/" + id + ".md")
+	}
+	if len(data) == 0 {
+		data, _ = files.ReadFile(id + ".md")
 	}
 	return strings.ReplaceAll(string(data), "\r\n", "\n")
 }
@@ -49,7 +59,7 @@ func Source(id string) string {
 // Markdown returns a page for showing in the app: without its "# Title" line, which the help
 // view shows in its title bar instead
 func Markdown(id string) string {
-	src := Source(id)
+	src := SourceForLanguage(id, i18n.Language())
 	if strings.HasPrefix(src, "# ") {
 		if i := strings.Index(src, "\n"); i >= 0 {
 			return strings.TrimLeft(src[i+1:], "\n")

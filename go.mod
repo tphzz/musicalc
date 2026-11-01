@@ -3,6 +3,8 @@ module musicalc
 go 1.26.2
 
 require (
+	golang.org/x/text v0.43.0
+	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	fyne.io/fyne/v2 v2.8.2
 	github.com/chinenual/go-scala v1.2.0
 	github.com/faiface/beep v1.1.0
@@ -36,7 +38,6 @@ require (
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/mattn/go-runewidth v0.0.31 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
-	github.com/nicksnyder/go-i18n/v2 v2.7.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
@@ -45,5 +46,4 @@ require (
 	golang.org/x/exp/shiny v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/mobile v0.0.0-20261011034528-197770444867 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 )

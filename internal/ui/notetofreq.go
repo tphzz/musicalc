@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"musicalc/internal/i18n"
 	"musicalc/internal/logic"
 	sclres "musicalc/internal/logic/scl"
 	"musicalc/internal/ui/widgets"
@@ -15,7 +16,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewDiapasonTab() fyne.CanvasObject {
+func NewDiapasonTab() *View {
+	texts := newTextRefresh()
 	// Reference frequency binding
 	refFreq := binding.NewString()
 	_ = refFreq.Set("440")
@@ -32,14 +34,21 @@ func NewDiapasonTab() fyne.CanvasObject {
 	noteNames := []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
 	// Tuning options: one submenu per catalog group (Equal, Just, Historic, World), short names inside
-	var tuningGroups []widgets.MenuGroup
-	for _, t := range sclres.Tunings() {
-		if n := len(tuningGroups); n == 0 || tuningGroups[n-1].Name != t.Group {
-			tuningGroups = append(tuningGroups, widgets.MenuGroup{Name: t.Group})
+	buildTuningGroups := func() []widgets.MenuGroup {
+		var tuningGroups []widgets.MenuGroup
+		lastGroup := ""
+		for _, t := range sclres.Tunings() {
+			if lastGroup != t.Group {
+				lastGroup = t.Group
+				tuningGroups = append(tuningGroups, widgets.MenuGroup{Name: i18n.T("tuning.group." + t.Group)})
+			}
+			g := &tuningGroups[len(tuningGroups)-1]
+			g.Options = append(g.Options, widgets.MenuOption{Label: i18n.T("tuning.scale." + t.Short), Value: t.Name})
 		}
-		g := &tuningGroups[len(tuningGroups)-1]
-		g.Options = append(g.Options, widgets.MenuOption{Label: t.Short, Value: t.Name})
+
+		return tuningGroups
 	}
+	tuningGroups := buildTuningGroups()
 
 	// Reset function
 	resetToDefaults := func() {
@@ -58,7 +67,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Frequency input
 	freqInput := widgets.NewNumericEntry()
 	freqInput.SetText("440")
-	freqInput.PlaceHolder = "Frequency"
+	texts.placeholder(freqInput, "field.frequency")
 	freqInput.OnChanged = func(s string) {
 		_ = refFreq.Set(s)
 	}
@@ -141,7 +150,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	updateCache()
 
 	// Reset button
-	resetBtn := widgets.NewButtonWithIcon("Reset", theme.ViewRefreshIcon(), func() {
+	resetBtn := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 		refNoteEntry.SetText("A3")
 		freqInput.SetText("440")
@@ -233,11 +242,11 @@ func NewDiapasonTab() fyne.CanvasObject {
 
 		switch id.Col {
 		case 0:
-			l.SetText("Note")
+			l.SetText(i18n.T("field.note"))
 		case 1:
-			l.SetText("Frequency")
+			l.SetText(i18n.T("field.frequency"))
 		case 2:
-			l.SetText("Cents")
+			l.SetText(i18n.T("field.cents"))
 		case 3:
 			l.SetText("MIDI")
 		}
@@ -327,18 +336,20 @@ func NewDiapasonTab() fyne.CanvasObject {
 	}))
 
 	// Build UI layout
-	return container.NewBorder(
+	texts.add(func() { tuningSelect.SetGroups(buildTuningGroups()); table.Refresh() })
+
+	return texts.view(container.NewBorder(
 		container.NewVBox(
 			container.NewGridWithColumns(2,
-				widget.NewLabel("Reference"),
+				texts.label("field.reference"),
 				refNoteEntry,
 			),
 			container.NewGridWithColumns(2,
-				widget.NewLabel("Frequency (Hz)"),
+				texts.label("field.frequency_hz"),
 				freqInput,
 			),
 			container.NewGridWithColumns(2,
-				widget.NewLabel("Middle C"),
+				texts.label("field.middle_c"),
 				middleCRadio,
 			),
 			// The tuning dropdown takes all the width Reset leaves, so its labels show in full
@@ -347,5 +358,5 @@ func NewDiapasonTab() fyne.CanvasObject {
 		),
 		nil, nil, nil,
 		responsiveTableWidget,
-	)
+	))
 }

@@ -2,7 +2,6 @@ package logic
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -65,13 +64,13 @@ func MarshalPresets(presets []Preset) ([]byte, error) {
 func UnmarshalPresets(data []byte) ([]Preset, error) {
 	var f PresetFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, errors.New("the file is not a MusiCalc preset file")
+		return nil, &PresetError{Kind: PresetFileInvalid}
 	}
 	if f.Kind != presetFileKind {
-		return nil, errors.New("the file does not contain Alignment Delay presets")
+		return nil, &PresetError{Kind: PresetKindInvalid}
 	}
 	if f.Version < 1 || f.Version > presetFileVersion {
-		return nil, fmt.Errorf("the file was made by a newer MusiCalc (preset format %d)", f.Version)
+		return nil, &PresetError{Kind: PresetVersionUnsupported, Version: f.Version}
 	}
 	for i := range f.Presets {
 		if err := validatePreset(&f.Presets[i]); err != nil {
@@ -90,14 +89,14 @@ func validDistance(d float64) bool {
 func validatePreset(p *Preset) error {
 	p.Name = strings.TrimSpace(p.Name)
 	if p.Name == "" {
-		return errors.New("a preset in the file has no name")
+		return &PresetError{Kind: PresetNameMissing}
 	}
 	if !validDistance(p.ReferenceMeters) {
-		return fmt.Errorf("preset “%s” has an invalid reference distance", p.Name)
+		return &PresetError{Kind: PresetReferenceInvalid, Name: p.Name}
 	}
 	for _, m := range p.Mics {
 		if !validDistance(m.DistanceMeters) {
-			return fmt.Errorf("preset “%s” has an invalid distance for “%s”", p.Name, m.Name)
+			return &PresetError{Kind: PresetMicInvalid, Name: p.Name, Mic: m.Name}
 		}
 	}
 	if !strings.EqualFold(p.DistanceUnit, UnitFeet) {
@@ -146,13 +145,13 @@ func MergePresets(existing, imported []Preset) (merged []Preset, renamed []strin
 func RenamePreset(presets []Preset, index int, newName string) error {
 	newName = strings.TrimSpace(newName)
 	if index < 0 || index >= len(presets) {
-		return errors.New("no such preset")
+		return &PresetError{Kind: PresetNotFound}
 	}
 	if newName == "" {
-		return errors.New("enter a name")
+		return &PresetError{Kind: PresetNameEmpty}
 	}
 	if i := FindPreset(presets, newName); i >= 0 && i != index {
-		return fmt.Errorf("a preset called “%s” already exists", presets[i].Name)
+		return &PresetError{Kind: PresetNameTaken, Name: presets[i].Name}
 	}
 	presets[index].Name = newName
 	return nil
