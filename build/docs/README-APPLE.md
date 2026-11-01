@@ -212,7 +212,9 @@ for consistent iOS 15 deployment targets, iPhone device family, and preservation
 of Xcode's concrete distribution entitlements. The module cache is never edited.
 
 An opaque 1024px iOS icon is generated from the existing artwork on a white
-background with the native AppKit tool; other platform assets remain unchanged.
+background with Core Graphics and ImageIO; other platform assets remain unchanged.
+The drawing buffer is supported 32-bit RGBX; the saved PNG is verified as 1024px
+RGB without alpha. Native icon tests run before signing or number reservation.
 
 The app bundle includes `PrivacyInfo.xcprivacy` at its root before final signing.
 The declarations cover monotonic in-app timing and metadata of the app's own

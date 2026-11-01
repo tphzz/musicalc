@@ -24,6 +24,10 @@ Unicode true
 !define UninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\MusiCalc.NSIS"
 !define InnoKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\{8F9A3D2E-5B6C-4A7E-9D8F-1C2E3A4B5C6D}_is1"
 
+Var InnoUninstall
+Var InnoDirectory
+Var UpgradeProbe
+
 Name "${AppName} ${AppVersion}"
 OutFile "${InstallerOutput}"
 InstallDir "$PROGRAMFILES64\${AppName}"
@@ -44,6 +48,7 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) 2026 B. Zeiss"
 !define MUI_ICON "${SourceRoot}\icons\appicon.ico"
 !define MUI_UNICON "${SourceRoot}\icons\appicon.ico"
 !define MUI_ABORTWARNING
+!define MUI_CUSTOMFUNCTION_ABORT CleanupUpgradeProbe
 !define MUI_LANGDLL_REGISTRY_ROOT "HKLM"
 !define MUI_LANGDLL_REGISTRY_KEY "${AppKey}"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "InstallerLanguage"
@@ -64,8 +69,14 @@ LangString DesktopShortcut ${LANG_ENGLISH} "Desktop shortcut"
 LangString DesktopShortcut ${LANG_GERMAN} "Desktop-Verknüpfung"
 LangString Unsupported ${LANG_ENGLISH} "This package requires Windows 10 or later on an x64 processor."
 LangString Unsupported ${LANG_GERMAN} "Dieses Paket benötigt Windows 10 oder neuer auf einem x64-Prozessor."
-LangString InnoConflict ${LANG_ENGLISH} "Uninstall the existing Inno Setup installation of MusiCalc before using this NSIS package."
-LangString InnoConflict ${LANG_GERMAN} "Deinstallieren Sie die vorhandene Inno-Setup-Installation von MusiCalc, bevor Sie dieses NSIS-Paket verwenden."
+LangString Upgrading ${LANG_ENGLISH} "Upgrading the previous MusiCalc installation..."
+LangString Upgrading ${LANG_GERMAN} "Die bisherige MusiCalc-Installation wird aktualisiert..."
+LangString UpgradeFailed ${LANG_ENGLISH} "The previous MusiCalc installation could not be removed. Repair that installation and run Setup again."
+LangString UpgradeFailed ${LANG_GERMAN} "Die bisherige MusiCalc-Installation konnte nicht entfernt werden. Reparieren Sie diese Installation und starten Sie das Setup erneut."
+LangString CloseForUpgrade ${LANG_ENGLISH} "Close MusiCalc and check that its installation folder is writable, then run Setup again."
+LangString CloseForUpgrade ${LANG_GERMAN} "Schließen Sie MusiCalc und prüfen Sie die Schreibrechte des Installationsordners. Starten Sie das Setup dann erneut."
+LangString DestinationNotWritable ${LANG_ENGLISH} "Setup cannot write to the installation folder. Choose a writable folder and try again."
+LangString DestinationNotWritable ${LANG_GERMAN} "Das Setup kann nicht in den Installationsordner schreiben. Wählen Sie einen beschreibbaren Ordner und versuchen Sie es erneut."
 LangString CloseApp ${LANG_ENGLISH} "Close MusiCalc before uninstalling, then try again."
 LangString CloseApp ${LANG_GERMAN} "Schließen Sie MusiCalc vor der Deinstallation und versuchen Sie es erneut."
 
@@ -79,15 +90,107 @@ Function .onInit
     SetErrorLevel 1633
     Abort
   ${EndIf}
-  ReadRegStr $0 HKLM "${InnoKey}" "UninstallString"
-  ${If} $0 != ""
-    MessageBox MB_OK|MB_ICONSTOP "$(InnoConflict)" /SD IDOK
-    SetErrorLevel 1638
-    Abort
+  Call ReadInnoInstallation
+  ${If} $InnoUninstall != ""
+  ${AndIf} $InnoDirectory != ""
+    StrCpy $INSTDIR $InnoDirectory
   ${EndIf}
   ReadRegStr $0 HKLM "${AppKey}" "InstallDir"
   ${If} $0 != ""
     StrCpy $INSTDIR $0
+  ${EndIf}
+FunctionEnd
+
+Function ReadInnoInstallation
+  ReadRegStr $InnoUninstall HKLM "${InnoKey}" "UninstallString"
+  ReadRegStr $InnoDirectory HKLM "${InnoKey}" "InstallLocation"
+  ${If} $InnoDirectory == ""
+    ReadRegStr $InnoDirectory HKLM "${InnoKey}" "Inno Setup: App Path"
+  ${EndIf}
+FunctionEnd
+
+Function CheckAppClosed
+  Exch $0
+  Push $1
+  IfFileExists "$0" 0 check_done
+  ; Opening for write without sharing also detects a running executable.
+  System::Call 'kernel32::CreateFileW(w r0, i 0x40000000, i 0, p 0, i 3, i 0x80, p 0) p.r1'
+  ${If} $1 == -1
+    MessageBox MB_OK|MB_ICONSTOP "$(CloseForUpgrade)" /SD IDOK
+    SetErrorLevel 1
+    Abort
+  ${EndIf}
+  System::Call 'kernel32::CloseHandle(p r1)'
+check_done:
+  Pop $1
+  Pop $0
+FunctionEnd
+
+Function CleanupUpgradeProbe
+  ${If} $UpgradeProbe != ""
+    Delete "$UpgradeProbe"
+    StrCpy $UpgradeProbe ""
+  ${EndIf}
+FunctionEnd
+
+Function .onInstFailed
+  Call CleanupUpgradeProbe
+FunctionEnd
+
+Function CheckDestination
+  ClearErrors
+  CreateDirectory "$INSTDIR"
+  IfErrors destination_error
+  GetTempFileName $UpgradeProbe "$INSTDIR"
+  IfErrors destination_error
+  FileOpen $0 "$UpgradeProbe" w
+  IfErrors destination_error
+  FileWrite $0 "MusiCalc setup"
+  FileClose $0
+  IfErrors destination_error
+  ; Keep the owned probe until new files exist so Inno cannot remove this folder.
+  Return
+destination_error:
+  Call CleanupUpgradeProbe
+  MessageBox MB_OK|MB_ICONSTOP "$(DestinationNotWritable)" /SD IDOK
+  SetErrorLevel 1
+  Abort
+FunctionEnd
+
+Function PrepareUpgrade
+  Push "$INSTDIR\musicalc.exe"
+  Call CheckAppClosed
+  Call ReadInnoInstallation
+  ${If} $InnoUninstall != ""
+    ${If} $InnoDirectory == ""
+      MessageBox MB_OK|MB_ICONSTOP "$(UpgradeFailed)" /SD IDOK
+      SetErrorLevel 1
+      Abort
+    ${EndIf}
+    Push "$InnoDirectory\musicalc.exe"
+    Call CheckAppClosed
+  ${EndIf}
+  Call CheckDestination
+  ${If} $InnoUninstall == ""
+    Return
+  ${EndIf}
+  DetailPrint "$(Upgrading)"
+  StrCpy $0 -1
+  ClearErrors
+  ExecWait '$InnoUninstall /VERYSILENT /SUPPRESSMSGBOXES /NORESTART' $0
+  ${If} ${Errors}
+  ${OrIf} $0 != 0
+    Call CleanupUpgradeProbe
+    MessageBox MB_OK|MB_ICONSTOP "$(UpgradeFailed)" /SD IDOK
+    SetErrorLevel 1
+    Abort
+  ${EndIf}
+  ReadRegStr $0 HKLM "${InnoKey}" "UninstallString"
+  ${If} $0 != ""
+    Call CleanupUpgradeProbe
+    MessageBox MB_OK|MB_ICONSTOP "$(UpgradeFailed)" /SD IDOK
+    SetErrorLevel 1
+    Abort
   ${EndIf}
 FunctionEnd
 
@@ -99,6 +202,8 @@ FunctionEnd
 
 Section "$(AppSection)"
   SectionIn RO
+  ; Migration starts only after Install, never while browsing/cancelling the wizard.
+  Call PrepareUpgrade
   SetOutPath "$INSTDIR"
   File /oname=musicalc.exe "${AppExe}"
   File /oname=LICENSE.txt "${SourceRoot}\LICENSE"
@@ -106,6 +211,7 @@ Section "$(AppSection)"
   SetOutPath "$INSTDIR\icons"
   File "${SourceRoot}\icons\appicon.png"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+  Call CleanupUpgradeProbe
   SetOutPath "$INSTDIR"
   CreateShortcut "$SMPROGRAMS\MusiCalc.lnk" "$INSTDIR\musicalc.exe" "" "$INSTDIR\appicon.ico"
   WriteRegStr HKLM "${AppKey}" "InstallDir" "$INSTDIR"

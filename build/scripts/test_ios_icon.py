@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 
-@unittest.skipUnless(sys.platform == "darwin", "requires macOS AppKit and Xcode")
+@unittest.skipUnless(sys.platform == "darwin", "requires macOS Core Graphics/ImageIO and Xcode")
 class IPhoneIconTests(unittest.TestCase):
     def test_real_icon_helper_creates_opaque_1024_png(self):
         root = Path(__file__).resolve().parents[2]
@@ -26,6 +26,20 @@ class IPhoneIconTests(unittest.TestCase):
             width, height, depth, color = struct.unpack(">IIBB", data[16:26])
             self.assertEqual((width, height, depth, color), (1024, 1024, 8, 2))
         self.assertEqual(hashlib.sha256(source.read_bytes()).digest(), original)
+
+
+
+    def test_missing_source_reports_failure_without_creating_output(self):
+        helper = Path(__file__).with_name("ios-icon.swift")
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "icon.png"
+            result = subprocess.run(
+                ["xcrun", "swift", str(helper), str(Path(temporary) / "missing.png"), str(output)],
+                capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("Cannot decode source", result.stderr)
+            self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

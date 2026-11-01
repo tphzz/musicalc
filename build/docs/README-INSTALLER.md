@@ -105,11 +105,34 @@ desktop shortcut, includes the MIT licence/icons, and registers an uninstaller.
 The standard wizard supports English and German. Uninstall removes only known
 installed files and its own shortcuts/registry entries; user preferences remain.
 
-An existing Inno Setup installation must be uninstalled before this NSIS package.
-Later NSIS installs reuse their recorded installation directory. Current aggregate
-CI still assembles the existing dual-architecture Inno installer; this NSIS
-builder is the local x64 route. Installation/upgrade testing is separate from
-successful compilation and payload verification.
+The installer detects an older Inno Setup installation and reuses its directory.
+After you click Install, it runs that installation's registered uninstaller
+silently without reboot, then installs/registers the new version. This removes
+the old package's registration while retaining application preferences and
+unrelated files. It checks that MusiCalc is closed and that the destination
+accepts file creation/writes before removing the old package. Cancellation or failure of the old uninstaller stops the
+upgrade before the new payload is copied.
+
+Existing NSIS installations are updated in their recorded directory. Canceling
+the wizard before Install leaves the old installation untouched. Current
+aggregate CI still assembles the existing dual-architecture Inno installer;
+this NSIS builder remains the local x64 route.
+
+#### Native installer upgrade tests
+
+On x64 Windows with NSIS 3 and Inno Setup 6, run:
+
+~~~powershell
+$env:MUSICALC_TEST_MAKENSIS = "C:\Program Files (x86)\NSIS\makensis.exe"
+$env:MUSICALC_TEST_ISCC = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+python -m unittest discover -s build/scripts -p test_nsis_upgrade.py -v
+~~~
+
+These tests compile the production control flow with inert payloads, temporary
+file paths and unique HKCU test keys. They exercise a real Inno uninstaller,
+NSIS updates/uninstall, locked files, an ACL-denied destination and failed/incomplete migration. They do
+not change an installed MusiCalc or its preferences. The tests skip when their
+native compilers/platform are unavailable.
 
 Linux packages retain the existing CPU optimization requirements. Tar archives
 contain a `musicalc/` directory and executable `install.sh`. Windows builds retain
