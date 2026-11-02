@@ -247,6 +247,17 @@ eligible App Store Connect users. Builds expire after 90 days.
 The pinned Fyne 1.7.3 source is copied into a temporary build directory and patched
 for consistent iOS 15 deployment targets, iPhone device family, and preservation
 of Xcode's concrete distribution entitlements. The module cache is never edited.
+The metadata-injection patch returns an error on failure and removes the import
+that became unused when replacing the upstream logging call.
+
+Validate changes to this patch by compiling the complete helper from the public
+checkout root, without signing or uploading:
+
+~~~bash
+python3 build/scripts/prepare-ios-tool.py
+~~~
+
+This verifies the pinned source, dry-runs/applies the patch and runs the Go compiler.
 
 An opaque 1024px iOS icon is generated from the existing artwork on a white
 background with Core Graphics and ImageIO; other platform assets remain unchanged.

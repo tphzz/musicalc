@@ -71,7 +71,10 @@
  		return errors.New("unable to codesign application bundle")
 --- a/cmd/fyne/internal/commands/package.go
 +++ b/cmd/fyne/internal/commands/package.go
-@@ -210,7 +210,7 @@
+@@ -23,2 +22,0 @@
+-	"fyne.io/fyne/v2"
+-
+@@ -210,7 +208,7 @@
  	if pkgUtil.IsMobile(p.os) { // we don't use the normal build command for mobile so inject before gomobile...
  		close, err := injectMetadataIfPossible(p.dir, p.appData, createMetadataInitFile)
  		if err != nil {
