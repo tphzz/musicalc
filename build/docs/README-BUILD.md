@@ -233,6 +233,59 @@ The workflow installs the pinned Fyne packaging CLI. For manual packaging use:
 go install fyne.io/tools/cmd/fyne@v1.7.3
 ~~~
 
+### NDK compiler fails inside another user's profile
+
+If the runner can hash/read clang.exe and its file ACL grants RX, but even
+`clang.exe --version` prints `Permission denied`, inspect the SDK's parent path.
+The NDK's [LLVM Windows startup](https://android.googlesource.com/toolchain/llvm-project/+/9f872551d3c681d06fd303b36f16ed5c274735eb/llvm/lib/Support/Windows/Process.inc#205)
+calls GetLongPathNameW before processing compiler options. That API also needs
+[List Folder/Read Data/Read Attributes on parent directories](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getlongpathnamew).
+Access to the executable alone does not supply access to another user's private
+profile. This can fail after the executable has already started.
+
+Provision the SDK in a shared location outside private profiles, for example
+`C:\Android\Sdk`. For an existing SDK on C:, close Android Studio and wait for
+all jobs using it to be idle. Run the following in Administrator PowerShell.
+It validates the source SDK, rejects an existing destination, and moves within
+the same volume rather than making another SDK copy. Change the destination drive
+if the current SDK is on a different volume.
+
+~~~powershell
+$ErrorActionPreference = 'Stop'
+$oldSdk = [Environment]::GetEnvironmentVariable('ANDROID_HOME','Machine')
+if ([string]::IsNullOrWhiteSpace($oldSdk)) { throw 'Machine ANDROID_HOME is not set' }
+$oldSdk = (Resolve-Path -LiteralPath $oldSdk).Path
+$newSdk = 'C:\Android\Sdk'
+if ($oldSdk -eq [IO.Path]::GetPathRoot($oldSdk)) { throw 'SDK source must not be a drive root' }
+foreach ($component in @('build-tools','platforms','ndk')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $oldSdk $component) -PathType Container)) { throw "SDK component missing: $component" }
+}
+if ([IO.Path]::GetPathRoot($oldSdk) -ne [IO.Path]::GetPathRoot($newSdk)) { throw 'Choose a destination on the same volume' }
+if (Test-Path -LiteralPath $newSdk) { throw "Destination already exists: $newSdk" }
+New-Item -ItemType Directory -Path (Split-Path -Parent $newSdk) -Force | Out-Null
+Move-Item -LiteralPath $oldSdk -Destination $newSdk
+[Environment]::SetEnvironmentVariable('ANDROID_HOME',$newSdk,'Machine')
+$env:ANDROID_HOME = $newSdk
+~~~
+
+The existing file permissions move with the SDK. Ensure the runner account has
+read/execute access to the shared parent directory and SDK tree. Update Android
+Studio's SDK Location to the new directory, and update any separately configured
+SDK/NDK paths that still name the old location. Restart the runner with a refreshed
+environment; rebooting the idle host ensures services inherit the new machine
+setting. A nonempty old process ANDROID_HOME takes precedence over the new machine
+setting until refreshed.
+
+In a fresh runner-account PowerShell, verify before retrying CI:
+
+~~~powershell
+$androidSdkPath = [Environment]::GetEnvironmentVariable('ANDROID_HOME','Machine')
+& "$androidSdkPath\ndk\30.0.16248370\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe" --version
+~~~
+
+That example uses NDK30.0.16248370; substitute the installed NDK version. A passing
+version command confirms startup, not a completed APK or native device test.
+
 ### Build
 
 ~~~powershell

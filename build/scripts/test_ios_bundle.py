@@ -37,14 +37,19 @@ class BundleTests(unittest.TestCase):
                  patch.object(module.sys, "platform", "darwin"), \
                  patch.object(module.Path, "home", return_value=home), \
                  patch.object(module, "run") as run, \
-                 patch.object(module, "reserve") as reserve, \
+                 patch.object(module, "current_build") as number, \
                  redirect_stderr(error), self.assertRaises(SystemExit) as stopped:
                 module.main()
             self.assertEqual(stopped.exception.code, 2)
             self.assertIn(str(expected), error.getvalue())
             self.assertIn("runner account", error.getvalue())
             run.assert_not_called()
-            reserve.assert_not_called()
+            number.assert_not_called()
+
+    def test_timestamp_build_survives_signed_bundle_verification(self):
+        number = 20261102120000
+        self.info["CFBundleVersion"] = str(number)
+        module.verify_bundle(self.info, self.profile, self.ent, "com.musicalc", "ABCDEFGHIJ", "0.9.0", number)
 
     def test_valid_distribution(self):
         self.verify()

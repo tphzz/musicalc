@@ -1,99 +1,68 @@
-from concurrent.futures import ThreadPoolExecutor
-import json
+from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
-from ios_build_number import reserve
+from unittest.mock import patch
+
+import ios_build_number as numbers
 
 
-class CounterTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / "counter.json"
+class BuildNumberTests(unittest.TestCase):
+    def test_utc_calendar_boundaries_produce_ordered_packager_integers(self):
+        moments = [datetime(2026, 11, 2, 23, 59, 59, tzinfo=timezone.utc),
+                   datetime(2026, 11, 3, 0, 0, 0, tzinfo=timezone.utc),
+                   datetime(2026, 12, 31, 23, 59, 59, tzinfo=timezone.utc),
+                   datetime(2027, 1, 1, 0, 0, 0, tzinfo=timezone.utc)]
+        actual = []
+        with patch.object(numbers, "datetime") as clock, patch.object(numbers.time, "sleep"):
+            for moment in moments:
+                clock.now.return_value = moment
+                actual.append(numbers.current_build())
+            clock.now.assert_called_with(timezone.utc)
+        self.assertEqual(actual, [20261102235959, 20261103000000, 20261231235959, 20270101000000])
+        self.assertEqual(actual, sorted(actual))
+        self.assertTrue(all(0 < value < 2**63 for value in actual))
 
-    def test_missing_and_new_versions_need_explicit_seed(self):
-        with self.assertRaises(ValueError):
-            reserve(self.path, "com.musicalc", "0.9.0")
-        self.assertEqual(reserve(self.path, "com.musicalc", "0.9.0", 0), 0)
-        self.assertEqual(reserve(self.path, "com.musicalc", "0.9.0"), 1)
-        with self.assertRaises(ValueError):
-            reserve(self.path, "com.musicalc", "0.9.1")
+    def test_pause_finishes_before_the_fresh_utc_sample(self):
+        events = []
+        moment = datetime(2026, 11, 2, 12, 0, 0, tzinfo=timezone.utc)
+        def read_clock(zone):
+            events.append("sample")
+            self.assertEqual(zone, timezone.utc)
+            return moment
+        with patch.object(numbers.time, "sleep", side_effect=lambda delay: events.append(("pause", delay))), \
+             patch.object(numbers, "datetime") as clock:
+            clock.now.side_effect = read_clock
+            self.assertEqual(numbers.current_build(), 20261102120000)
+        self.assertEqual(events, [("pause", 1), "sample"])
 
+    def test_real_sequential_attempts_need_no_state_and_leave_legacy_files_untouched(self):
+        with tempfile.TemporaryDirectory(prefix="ios build numbers ") as temporary:
+            folder = Path(temporary)
+            legacy = folder / "build-numbers.json"
+            original = b"not JSON; old bundle and reservations are irrelevant"
+            legacy.write_bytes(original)
+            command = [sys.executable, "-B", str(Path(numbers.__file__))]
+            results = [subprocess.run(command, cwd=folder, capture_output=True, text=True) for _ in range(2)]
+            for result in results:
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertRegex(result.stdout.strip(), r"^[0-9]{14}$")
+            self.assertLess(int(results[0].stdout), int(results[1].stdout))
+            self.assertEqual(legacy.read_bytes(), original)
+            self.assertEqual(list(folder.iterdir()), [legacy])
 
-    def test_automatic_new_version_and_state_use_apple_high_water_mark(self):
-        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=0), 1)
-        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=0), 2)
-        self.assertEqual(reserve(self.path, "io.example.app", "0.10.0", minimum=0), 1)
-        self.assertEqual(reserve(self.path, "io.example.app", "0.10.0", minimum=7), 8)
-        state = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(state, {"bundle": "io.example.app", "versions": {"0.9.0": 2, "0.10.0": 8}})
-
-    def test_automatic_existing_version_preserves_local_reservations(self):
-        reserve(self.path, "io.example.app", "0.9.0", 12)
-        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=3), 13)
-        self.assertEqual(reserve(self.path, "io.example.app", "0.9.0", minimum=18), 19)
-
-    def test_automatic_recovery_and_exhaustion_do_not_replace_good_state(self):
-        reserve(self.path, "io.example.app", "0.9.0", 12)
-        before = self.path.read_bytes()
-        for value in (True, -1, 10000, "12", 9999):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                reserve(self.path, "io.example.app", "0.9.0", minimum=value)
-            self.assertEqual(self.path.read_bytes(), before)
-        with self.assertRaises(ValueError):
-            reserve(self.path, "wrong.bundle", "0.9.0", minimum=0)
-        self.assertEqual(self.path.read_bytes(), before)
-
-    def test_automatic_allocation_rejects_corrupt_local_version(self):
-        self.path.write_text('{"bundle":"io.example.app","versions":{"0.9.0":"12"}}', encoding="utf-8")
-        before = self.path.read_bytes()
-        with self.assertRaises(ValueError):
-            reserve(self.path, "io.example.app", "0.9.0", minimum=0)
-        self.assertEqual(self.path.read_bytes(), before)
-
-    def test_concurrent_reservations_are_unique_and_durable(self):
-        reserve(self.path, "com.musicalc", "0.9.0", 0)
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            values = list(pool.map(lambda _: reserve(self.path, "com.musicalc", "0.9.0"), range(12)))
-        self.assertEqual(sorted(values), list(range(1, 13)))
-        self.assertEqual(reserve(self.path, "com.musicalc", "0.9.0"), 13)
-
-    def test_recovery_cannot_reuse_reserved_numbers(self):
-        reserve(self.path, "com.musicalc", "0.9.0", 20)
-        with self.assertRaises(ValueError):
-            reserve(self.path, "com.musicalc", "0.9.0", 19)
-        self.assertEqual(reserve(self.path, "com.musicalc", "0.9.0"), 21)
-        with self.assertRaises(ValueError):
-            reserve(self.path, "other.bundle", "0.9.0")
-
-    def test_bundle_mismatch_reports_both_ids_without_changing_state(self):
-        reserve(self.path, "com.musicalc", "0.9.0", 0)
-        before = self.path.read_bytes()
-        with self.assertRaises(ValueError) as stopped:
-            reserve(self.path, "io.example.musicalc", "0.9.0")
-        message = str(stopped.exception)
-        self.assertIn(str(self.path), message)
-        self.assertIn("com.musicalc", message)
-        self.assertIn("io.example.musicalc", message)
-        self.assertEqual(self.path.read_bytes(), before)
-
-    def test_invalid_counter_shape_reports_recovery_without_changing_state(self):
-        for state in ([], {"bundle": "com.musicalc", "versions": []}):
-            with self.subTest(state=state):
-                self.path.write_text(json.dumps(state), encoding="utf-8")
-                before = self.path.read_bytes()
-                with self.assertRaisesRegex(ValueError, "restore|reconcile"):
-                    reserve(self.path, "com.musicalc", "0.9.0")
-                self.assertEqual(self.path.read_bytes(), before)
-
-    def test_corrupt_or_exhausted_state_fails(self):
-        self.path.write_text('{"bundle":"com.musicalc","versions":{"0.9.0":9999}}')
-        with self.assertRaises(ValueError):
-            reserve(self.path, "com.musicalc", "0.9.0")
-        self.path.write_text("bad json")
-        with self.assertRaises(ValueError):
-            reserve(self.path, "com.musicalc", "0.9.0")
+    def test_obsolete_seed_and_migration_commands_fail_without_writing_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            journal = Path(temporary) / "build-numbers.json"
+            for operation in (["--version", "0.9.0", "--seed", "0"],
+                              ["--migrate-bundle-from", "com.musicalc"]):
+                command = [sys.executable, "-B", str(Path(numbers.__file__)), "--file", str(journal),
+                           "--bundle", "io.example.musicalc", *operation]
+                result = subprocess.run(command, capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(list(journal.parent.iterdir()), [])
 
 
 if __name__ == "__main__":

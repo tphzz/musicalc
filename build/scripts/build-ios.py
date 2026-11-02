@@ -13,7 +13,7 @@ import stat
 import subprocess
 import sys
 import tempfile
-from ios_build_number import reserve
+from ios_build_number import current_build
 from ios_app_store import latest_build
 from version import ROOT, current
 
@@ -101,29 +101,34 @@ def main():
     if int(re.search(r"Xcode (\d+)", xcode)[1]) < 26 or int(sdk.split(".")[0]) < 26:
         parser.error("Install/select Xcode 26+ and the iOS 26+ SDK before packaging")
     env = os.environ.copy()
-    for key in ("app_id", "api_key_id", "api_issuer_id", "key_directory"):
-        if not config.get(key):
-            parser.error("Missing App Store Connect setting: " + key)
-    if not re.fullmatch(r"[0-9]+", str(config["app_id"])):
-        parser.error("app_id must be the numeric App Store Connect app ID")
-    if not re.fullmatch(r"[A-Z0-9]{10}", str(config["api_key_id"])):
-        parser.error("api_key_id must be the 10-character team API key ID")
-    key_directory = Path(config["key_directory"]).expanduser()
-    private_key = key_directory / f"AuthKey_{config['api_key_id']}.p8"
-    try:
-        verify_private_key(private_key, os.getuid())
-    except ValueError as error:
-        parser.error(str(error))
-    env["API_PRIVATE_KEYS_DIR"] = str(key_directory)
+    if args.upload:
+        for key in ("app_id", "api_key_id", "api_issuer_id", "key_directory"):
+            if not config.get(key):
+                parser.error("Missing App Store Connect setting: " + key)
+        if not re.fullmatch(r"[0-9]+", str(config["app_id"])):
+            parser.error("app_id must be the numeric App Store Connect app ID")
+        if not re.fullmatch(r"[A-Z0-9]{10}", str(config["api_key_id"])):
+            parser.error("api_key_id must be the 10-character team API key ID")
+        key_directory = Path(config["key_directory"]).expanduser()
+        private_key = key_directory / f"AuthKey_{config['api_key_id']}.p8"
+        try:
+            verify_private_key(private_key, os.getuid())
+        except ValueError as error:
+            parser.error(str(error))
+        env["API_PRIVATE_KEYS_DIR"] = str(key_directory)
     data = current()
     version = data["marketing_version"]
     tool = ROOT / "build/.cache/fyne-ios"
     tool.parent.mkdir(parents=True, exist_ok=True)
     icon = tool.parent / "ios-appicon.png"
     run("xcrun", "swift", ROOT / "build/scripts/ios-icon.swift", ROOT / "icons/appicon.png", icon)
-    highest = latest_build(config, bundle, version)
-    build = reserve(directory / "build-numbers.json", bundle, version, minimum=highest)
-    print(f"Reserved iPhone {version} build {build}", flush=True)
+    build = current_build()
+    if args.upload:
+        highest = latest_build(config, bundle, version)
+        if (build, 0, 0) <= highest:
+            previous = ".".join(map(str, highest))
+            parser.error(f"Generated build {build} is not newer than App Store build {previous}; check the runner UTC clock")
+    print(f"Building iPhone {version} build {build}", flush=True)
     run(sys.executable, ROOT / "build/scripts/prepare-ios-tool.py")
     run(tool, "release", "--os", "ios", "--name", "MusiCalc", "--app-id", bundle,
         "--app-version", version, "--app-build", build, "--icon", icon,

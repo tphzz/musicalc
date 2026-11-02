@@ -28,7 +28,7 @@ class AppStoreTests(unittest.TestCase):
 
     def test_new_version_has_zero_high_water_mark(self):
         value, calls = self.latest([APP, builds()])
-        self.assertEqual(value, 0)
+        self.assertEqual(value, (0, 0, 0))
         query = parse_qs(urlsplit(calls[1].args[0]).query)
         self.assertEqual(query["filter[app]"], [CONFIG["app_id"]])
         self.assertEqual(query["filter[preReleaseVersion.version]"], ["0.10.0"])
@@ -37,12 +37,18 @@ class AppStoreTests(unittest.TestCase):
     def test_every_page_is_compared_numerically(self):
         next_url = "https://api.appstoreconnect.apple.com/v1/builds?cursor=next"
         value, calls = self.latest([APP, builds("9", next_url=next_url), builds("10", "2")])
-        self.assertEqual(value, 10)
+        self.assertEqual(value, (10, 0, 0))
         self.assertEqual(calls[2].args[0], next_url)
+
+    def test_timestamp_and_dotted_builds_are_compared_as_numeric_components(self):
+        value, _ = self.latest([APP, builds("9999", "20261102120000", "20261102120000.1")])
+        self.assertEqual(value, (20261102120000, 1, 0))
+        value, _ = self.latest([APP, builds("9.99.99", "10.1", "10.0.10")])
+        self.assertEqual(value, (10, 1, 0))
 
     def test_query_relative_pagination_keeps_the_current_endpoint(self):
         value, calls = self.latest([APP, builds("9", next_url="?cursor=next"), builds("10")])
-        self.assertEqual(value, 10)
+        self.assertEqual(value, (10, 0, 0))
         self.assertEqual(calls[2].args[0], "https://api.appstoreconnect.apple.com/v1/builds?cursor=next")
 
     def test_wrong_app_bundle_fails_before_build_query(self):
@@ -51,7 +57,7 @@ class AppStoreTests(unittest.TestCase):
             self.latest([other])
 
     def test_malformed_pages_and_unsupported_numbers_fail_closed(self):
-        for page in ({}, {"data": {}}, builds("1.2"), builds("10000"), builds("0"),
+        for page in ({}, {"data": {}}, builds("1.2.3.4"), builds("-1"), builds("1..2"),
                      builds("abc"), {"data": [None]}, {"data": [], "links": []},
                      {"data": []}, {"data": [], "links": {}},
                      {"data": [], "links": {"self": ""}},

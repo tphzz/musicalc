@@ -1,4 +1,4 @@
-"""Read App Store Connect's iOS build high-water mark using the runner's team key."""
+"""Validate the upload destination and existing iOS build versions in App Store Connect."""
 import json
 from pathlib import Path
 import re
@@ -40,13 +40,14 @@ def request_json(url, token):
     except HTTPError as exc:
         raise ValueError(f"App Store Connect HTTP {exc.code}; check app access and API credentials") from None
     except (URLError, TimeoutError):
-        raise ValueError("Cannot reach App Store Connect; no build number was reserved") from None
+        raise ValueError("Cannot reach App Store Connect") from None
     if not isinstance(value, dict):
         raise ValueError("Invalid App Store Connect response")
     return value
 
 
 def latest_build(config, bundle, version):
+    """Return the latest CFBundleVersion as three numeric components for upload checks."""
     token = api_token(config)
     app_id = str(config["app_id"])
     app = request_json(API + f"/v1/apps/{app_id}?" + urlencode({"fields[apps]": "bundleId"}), token)
@@ -59,7 +60,7 @@ def latest_build(config, bundle, version):
         "filter[app]": app_id, "filter[preReleaseVersion.version]": version,
         "filter[preReleaseVersion.platform]": "IOS", "fields[builds]": "version", "limit": 200,
     })
-    highest = 0
+    highest = (0, 0, 0)
     visited = set()
     while url:
         if url in visited:
@@ -76,9 +77,10 @@ def latest_build(config, bundle, version):
         for row in rows:
             attributes = row.get("attributes") if isinstance(row, dict) else None
             number = attributes.get("version") if isinstance(attributes, dict) else None
-            if not isinstance(number, str) or not re.fullmatch(r"[1-9][0-9]{0,3}", number):
-                raise ValueError("App Store Connect build numbers must be integers in 1..9999")
-            highest = max(highest, int(number))
+            if not isinstance(number, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", number):
+                raise ValueError("App Store Connect build versions must have one to three numeric components")
+            parts = tuple(map(int, number.split(".")))
+            highest = max(highest, parts + (0,) * (3 - len(parts)))
         following = links.get("next")
         if following is not None and (
                 not isinstance(following, str) or not following or any(c.isspace() for c in following)):
