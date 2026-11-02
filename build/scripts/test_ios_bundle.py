@@ -1,6 +1,8 @@
 import datetime
 from contextlib import redirect_stderr
 import io
+import os
+import stat
 import tempfile
 from unittest.mock import patch
 import importlib.util
@@ -66,6 +68,68 @@ class BundleTests(unittest.TestCase):
         self.profile["ExpirationDate"]=datetime.datetime(2000,1,1)
         with self.assertRaises(ValueError):
             self.verify()
+
+
+
+class PrivateKeyTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="musicalc private key ")
+        self.addCleanup(temporary.cleanup)
+        self.key = Path(temporary.name) / "AuthKey_0123456789.p8"
+        self.secret = "private key fixture must not be printed"
+        self.key.write_text(self.secret, encoding="utf-8")
+        self.metadata = self.key.stat()
+
+    def verify(self, uid=None, mode=0o600, owner=None):
+        values = list(self.metadata)
+        values[0] = stat.S_IFREG | mode
+        values[4] = self.metadata.st_uid if owner is None else owner
+        with patch.object(module.Path, "stat", return_value=os.stat_result(values)), \
+             patch.object(module.Path, "read_text", side_effect=AssertionError("Do not read the key")):
+            module.verify_private_key(self.key, self.metadata.st_uid if uid is None else uid)
+
+    def test_valid_key_metadata_passes_without_reading_contents(self):
+        self.verify()
+
+    def test_missing_key_reports_the_resolved_path(self):
+        self.key.unlink()
+        with self.assertRaises(ValueError) as error:
+            module.verify_private_key(self.key, self.metadata.st_uid)
+        self.assertIn(str(self.key), str(error.exception))
+        self.assertIn("not found", str(error.exception))
+
+    def test_directory_is_not_a_key(self):
+        self.key.unlink()
+        self.key.mkdir()
+        with self.assertRaisesRegex(ValueError, "regular file"):
+            module.verify_private_key(self.key, self.metadata.st_uid)
+
+    def test_wrong_owner_and_mode_are_reported_together(self):
+        with self.assertRaises(ValueError) as error:
+            self.verify(uid=42, owner=43, mode=0o644)
+        message = str(error.exception)
+        for expected in (str(self.key), "43", "42", "0644", "0600"):
+            self.assertIn(expected, message)
+        self.assertNotIn(self.secret, message)
+
+    def test_ownership_is_still_required_with_correct_mode(self):
+        with self.assertRaisesRegex(ValueError, "owner"):
+            self.verify(uid=42, owner=43)
+
+    def test_exact_mode_600_is_still_required(self):
+        for mode in (0o400, 0o640, 0o644, 0o700):
+            with self.subTest(mode=mode), self.assertRaises(ValueError) as error:
+                self.verify(mode=mode)
+            self.assertIn(f"{mode:04o}", str(error.exception))
+            self.assertIn("0600", str(error.exception))
+
+    def test_inspection_failure_is_actionable_and_does_not_print_contents(self):
+        with patch.object(module.Path, "stat", side_effect=PermissionError(13, "Permission denied")), \
+             self.assertRaises(ValueError) as error:
+            module.verify_private_key(self.key, self.metadata.st_uid)
+        self.assertIn(str(self.key), str(error.exception))
+        self.assertIn("Permission denied", str(error.exception))
+        self.assertNotIn(self.secret, str(error.exception))
 
 
 if __name__ == "__main__":

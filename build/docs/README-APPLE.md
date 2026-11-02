@@ -147,6 +147,37 @@ The iPhone job uses the existing signing-keychain password file to unlock the
 installed Apple Distribution private key. No new GitHub credential secret names
 are required.
 
+## Diagnosing the App Store Connect key
+
+The key preflight reports the expanded absolute filename and the specific failure:
+missing/non-regular file, inaccessible metadata, owner UID mismatch, mode mismatch,
+or both owner and mode. The existing owner and exact `0600` requirements still apply.
+This is the App Store Connect API key, separate from the signing-keychain identity.
+
+In a terminal at the public checkout root, logged in as the **runner account**,
+inspect the exact file selected by config.json:
+
+~~~bash
+id
+asc_key="$(python3 -c 'import json,pathlib; c=json.loads((pathlib.Path.home()/".config/musicalc-ios/config.json").read_text()); print((pathlib.Path(c["key_directory"]).expanduser()/ ("AuthKey_"+c["api_key_id"]+".p8")).absolute())')"
+ls -lnL "$asc_key"
+~~~
+
+Only the path and ownership/permission metadata are printed. If the file is missing,
+copy the downloaded matching `AuthKey_<KEY_ID>.p8` there or correct `key_directory`
+and `api_key_id`. If the existing file has the wrong owner or mode, the following
+repairs that file for the account currently logged in:
+
+~~~bash
+sudo chown "$(id -u):$(id -g)" "$asc_key" && chmod 600 "$asc_key"
+ls -lnL "$asc_key"
+~~~
+
+The owner UID must match `id -u`, with `-rw-------` permissions. A failed preflight
+stops before icon generation, Apple queries, build-number reservation or packaging.
+The key is needed even without upload because every build queries Apple's existing
+build numbers.
+
 ## Automatic build numbers
 
 Every iPhone run automatically:

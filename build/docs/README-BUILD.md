@@ -198,31 +198,53 @@ The Android build runs on Windows with PowerShell and produces an ARM64 APK.
 
 ### Prerequisites
 
-1. **Android SDK and NDK**
+Provision the Android SDK for the **runner service account**, using an accessible
+shared directory if several runner accounts use it. Android Studio's Tools → SDK
+Manager shows the SDK Location. Install an SDK Platform, Android SDK Build-Tools
+(provides `zipalign`), and NDK (Side by side); a JDK is also required by packaging.
+The workflow does not install these prerequisites.
 
-   Install Android Studio, then open the SDK Manager → "SDK Tools" and install:
-   - **Android SDK Build-Tools** (provides `zipalign`)
-   - **NDK (Side by side)**
+SDK selection is: process `ANDROID_HOME`, machine-level `ANDROID_HOME`, then
+`%LOCALAPPDATA%\Android\Sdk` for the runner account. The machine setting is read
+from Windows directly when the process setting is empty. A nonempty configured
+path that is missing fails explicitly instead of switching installations. Inspect
+both settings with:
 
-   The build script uses `%LOCALAPPDATA%\Android\Sdk` and the newest NDK inside it by default. Set `ANDROID_HOME` and/or `ANDROID_NDK_HOME` to override.
+~~~powershell
+[pscustomobject]@{Process=$env:ANDROID_HOME; Machine=[Environment]::GetEnvironmentVariable('ANDROID_HOME','Machine')}
+~~~
 
-2. **Fyne CLI**
-   ```powershell
-   go install fyne.io/tools/cmd/fyne@latest
-   ```
+For an existing SDK, set its location from Administrator PowerShell:
+
+~~~powershell
+$androidSdkPath = (Read-Host 'Android SDK location').Trim().Trim('"'); if (-not (Test-Path -LiteralPath $androidSdkPath -PathType Container)) { throw 'SDK directory does not exist' }; [Environment]::SetEnvironmentVariable('ANDROID_HOME', $androidSdkPath, 'Machine')
+~~~
+
+An explicit process setting takes precedence. If a running runner retains an old
+nonempty value, restart it while idle after correcting that setting. The script
+uses `ANDROID_NDK_HOME` when it points to an installed NDK; otherwise it selects
+the newest side-by-side NDK under the selected SDK. It requires `llvm-readelf` to
+verify native library alignment. These settings do not install an SDK or grant
+access to another user's private profile.
+
+The workflow installs the pinned Fyne packaging CLI. For manual packaging use:
+
+~~~powershell
+go install fyne.io/tools/cmd/fyne@v1.7.3
+~~~
 
 ### Build
 
-```powershell
+~~~powershell
 .\build\scripts\build-android.ps1
-```
+~~~
 
-The script builds a release APK with the `no_emoji`, `no_animations` and `migrated_fynedo` tags for a smaller, snappier app, aligns it to 16 KB boundaries (required for Android 15+), and writes it to `build\dist\musicalc.apk`. App metadata (name, ID, icon) comes from `FyneApp.toml`; the version comes from the latest Git tag and the build number from the commit count.
-
-Install it on a connected device with:
-```powershell
-adb install -r build\dist\musicalc.apk
-```
+The release APK uses `no_emoji`, `no_animations` and `migrated_fynedo`, and mandatory
+16 KB ZIP/native-library alignment checks. Output is
+`build/dist/musicalc_<version>_android_arm64.apk`; the successful build prints the
+exact filename. `FyneApp.toml` supplies app identity/icon metadata; the shared
+version resolver supplies marketing version and build number. Use that exact
+reported APK filename with `adb install -r` for device installation.
 
 ## Requirements
 

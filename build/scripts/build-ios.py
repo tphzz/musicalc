@@ -47,6 +47,28 @@ def verify_bundle(info, profile, entitlements, bundle, team, version, build):
         raise ValueError("Signed application team identifier is incorrect")
 
 
+def verify_private_key(private_key, runner_uid):
+    private_key = private_key.absolute()
+    try:
+        metadata = private_key.stat()
+    except FileNotFoundError:
+        raise ValueError(
+            f"ASC private key not found: {private_key}. Check key_directory and api_key_id in the runner config"
+        ) from None
+    except OSError as error:
+        raise ValueError(f"Cannot inspect ASC private key {private_key}: {error.strerror}") from None
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError(f"ASC private key must be a regular file: {private_key}")
+    problems = []
+    if metadata.st_uid != runner_uid:
+        problems.append(f"owner uid {metadata.st_uid}, expected runner uid {runner_uid}")
+    mode = stat.S_IMODE(metadata.st_mode)
+    if mode != 0o600:
+        problems.append(f"mode {mode:04o}, expected 0600")
+    if problems:
+        raise ValueError(f"ASC private key {private_key}: " + "; ".join(problems))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upload", action="store_true")
@@ -88,8 +110,10 @@ def main():
         parser.error("api_key_id must be the 10-character team API key ID")
     key_directory = Path(config["key_directory"]).expanduser()
     private_key = key_directory / f"AuthKey_{config['api_key_id']}.p8"
-    if not private_key.is_file() or private_key.stat().st_uid != os.getuid() or stat.S_IMODE(private_key.stat().st_mode) != 0o600:
-        parser.error("ASC private key must exist, be owned by the runner, and be mode 600")
+    try:
+        verify_private_key(private_key, os.getuid())
+    except ValueError as error:
+        parser.error(str(error))
     env["API_PRIVATE_KEYS_DIR"] = str(key_directory)
     data = current()
     version = data["marketing_version"]

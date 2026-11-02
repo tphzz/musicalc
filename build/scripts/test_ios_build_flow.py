@@ -1,6 +1,8 @@
 from contextlib import ExitStack
 import importlib.util
 import json
+import io
+from contextlib import redirect_stderr
 from pathlib import Path
 import tempfile
 import unittest
@@ -58,6 +60,20 @@ class BuildFlowTests(unittest.TestCase):
         if len(args) > 1 and str(args[1]).endswith("prepare-ios-tool.py"):
             raise RuntimeError("packaging boundary")
         return b""
+
+    def test_missing_private_key_stops_before_icon_lookup_and_reservation(self):
+        key = Path(self.config["key_directory"]) / "AuthKey_0123456789.p8"
+        key.unlink()
+        error = io.StringIO()
+        with patch.object(module, "reserve") as reserve, redirect_stderr(error), \
+             self.assertRaises(SystemExit) as stopped:
+            module.main()
+        self.assertEqual(stopped.exception.code, 2)
+        self.assertIn(str(key), error.getvalue())
+        self.assertIn("not found", error.getvalue())
+        self.remote.assert_not_called()
+        reserve.assert_not_called()
+        self.assertFalse(any(call.args[:2] == ("xcrun", "swift") for call in self.run.call_args_list))
 
     def test_checkout_version_and_config_bundle_are_reserved_automatically(self):
         with self.assertRaisesRegex(RuntimeError, "packaging boundary"):

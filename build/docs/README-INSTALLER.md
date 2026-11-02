@@ -110,6 +110,24 @@ PKG_CONFIG_PATH/PKG_CONFIG_LIBDIR inside that container. PKG_CONFIG_PATH adds se
 directories to the defaults; the Python directory exported by setup-python does
 not by itself remove the system search paths.
 
+## Windows installer compiler
+
+Install Inno Setup 6 on each host eligible for the installer job. The helper selects
+an explicit `ISCC_PATH` (process, then machine setting), then `iscc` from PATH,
+then standard Inno Setup 6 directories under Program Files or the runner account's
+Local AppData/Programs. It prints the selected executable. A configured override
+that does not exist fails directly; no other compiler is silently substituted.
+
+For a custom installation, set the machine-level path from Administrator PowerShell:
+
+~~~powershell
+$compilerPath = (Read-Host 'Full path to ISCC.exe').Trim().Trim('"'); if (-not (Test-Path -LiteralPath $compilerPath -PathType Leaf)) { throw 'Compiler does not exist' }; [Environment]::SetEnvironmentVariable('ISCC_PATH', $compilerPath, 'Machine')
+~~~
+
+The executable and its installation directory must be accessible to the normal
+runner account. Installed compilers need no PATH edit when found by these rules;
+missing tools still require installation. The build does not install or update Inno.
+
 ## Windows disk space
 
 `NoSpaceLeft` or `Es steht nicht genug Speicherplatz auf dem Datenträger zur
