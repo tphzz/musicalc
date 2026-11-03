@@ -80,6 +80,30 @@ security set-keychain-settings -lut 7200 "$HOME/Library/Keychains/login.keychain
 See [Apple's keychain/signing troubleshooting](https://developer.apple.com/forums/thread/712005)
 and the [security command's settings options](https://github.com/apple-oss-distributions/Security/blob/main/SecurityTool/macOS/security.c).
 
+## CI signing preflight and keychain selection
+
+The iPhone packager selects the runner's explicit login keychain for identity
+lookup, the Xcode signing flags, Fyne's IPA signing, and the final signing after
+privacy metadata is added. The patched tool receives the same path through
+`MUSICALC_IOS_SIGNING_KEYCHAIN`, set by the packaging script. Existing Xcode
+`OTHER_CODE_SIGN_FLAGS` from the environment are retained; the keychain path is
+quoted for paths containing spaces.
+
+Before compiling the Fyne tool or app, packaging prints the runner account,
+keychain search list and login-keychain settings, then signs and verifies a
+temporary copy of `/usr/bin/true` using the configured identity and explicit
+keychain. It does not execute that copy. A failure stops before icon generation,
+build-number generation, App Store Connect queries or tool compilation. The
+check uses disposable data under `build/.cache/` and prints no passwords or
+private-key data.
+
+A successful interactive-terminal signing test does not establish that a runner
+service has the same keychain access. If the preflight fails only in Actions,
+inspect its account/search-list/settings output and the runner's launchd service
+context. If it passes and Xcode signing fails, retain the Xcode CodeSign command
+and error. See [Apple's execution-context guidance](https://developer.apple.com/forums/thread/712005)
+and [GitHub's macOS runner-service diagnostics](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/monitor-and-troubleshoot?platform=mac).
+
 ## iOS signing and notarization
 
 The current iPhone workflow distributes through **App Store Connect / TestFlight**.

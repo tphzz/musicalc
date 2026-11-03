@@ -2,6 +2,7 @@ from contextlib import ExitStack, redirect_stderr
 import importlib.util
 import io
 import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -45,6 +46,8 @@ class BuildFlowTests(unittest.TestCase):
         self.remote = stack.enter_context(patch.object(module, "latest_build", return_value=(8, 0, 0)))
         self.run = stack.enter_context(patch.object(module, "run", side_effect=self.run_command))
         self.icon_fails = False
+        self.signing_fails = False
+        stack.enter_context(patch.object(module.shutil, "copy2", side_effect=lambda src, dst: Path(dst).write_bytes(b"signing probe")))
 
     def save_config(self):
         (self.directory / "config.json").write_text(json.dumps(self.config), encoding="utf-8")
@@ -52,6 +55,8 @@ class BuildFlowTests(unittest.TestCase):
     def run_command(self, *args, **kwargs):
         if args[:2] == ("security", "find-identity"):
             return (("A"*40) + ' "' + self.config["certificate"] + '"').encode()
+        if args[0] == "codesign" and self.signing_fails:
+            raise subprocess.CalledProcessError(1, list(args))
         if args[0] == "xcodebuild":
             return b"Xcode 26.0"
         if args[:2] == ("xcrun", "--sdk"):
@@ -159,6 +164,28 @@ class BuildFlowTests(unittest.TestCase):
              self.assertRaises(ValueError):
             module.main()
         self.assertFalse(any(len(call.args) > 1 and call.args[1] == "release" for call in self.run.call_args_list))
+
+    def test_signing_failure_stops_before_icon_build_number_apple_and_tool(self):
+        self.signing_fails = True
+        with patch.object(module.sys, "argv", ["build-ios.py", "--upload"]), \
+             self.assertRaisesRegex(ValueError, "signing preflight failed.*runner session"):
+            module.main()
+        self.number.assert_not_called()
+        self.remote.assert_not_called()
+        self.assertFalse(any(call.args[:2] == ("xcrun", "swift") for call in self.run.call_args_list))
+        self.assertFalse(any(str(call.args[0]).endswith("prepare-ios-tool.py") or
+                             any(str(arg).endswith("prepare-ios-tool.py") for arg in call.args)
+                             for call in self.run.call_args_list))
+
+    def test_packaging_uses_one_explicit_login_keychain(self):
+        self.package()
+        keychain = self.home / "Library/Keychains/login.keychain-db"
+        lookup = next(call for call in self.run.call_args_list if call.args[:2] == ("security", "find-identity"))
+        self.assertEqual(lookup.args[-1], keychain)
+        probe = next(call for call in self.run.call_args_list if call.args[0] == "codesign")
+        self.assertEqual(probe.args[probe.args.index("--keychain") + 1], keychain)
+        release = next(call for call in self.run.call_args_list if len(call.args) > 1 and call.args[1] == "release")
+        self.assertEqual(release.kwargs["env"]["MUSICALC_IOS_SIGNING_KEYCHAIN"], str(keychain))
 
     def test_icon_preflight_failure_does_not_start_packaging(self):
         self.icon_fails = True

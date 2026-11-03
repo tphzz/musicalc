@@ -24,6 +24,26 @@ def run(*args, capture=False, env=None):
     return result.stdout if capture else b""
 
 
+def verify_signing_identity(identity, keychain):
+    """Exercise the private key in the actual runner session before compiling."""
+    cache = ROOT / "build/.cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    print(f"Checking iPhone signing in runner session using {keychain}", flush=True)
+    try:
+        run("id")
+        run("security", "list-keychains", "-d", "user")
+        run("security", "show-keychain-info", keychain)
+        with tempfile.TemporaryDirectory(prefix="ios-signing-", dir=cache) as temporary:
+            probe = Path(temporary) / "signing-probe"
+            shutil.copy2("/usr/bin/true", probe)
+            run("codesign", "--force", "--sign", identity, "--keychain", keychain,
+                "--timestamp=none", probe)
+            run("codesign", "--verify", "--strict", probe)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError("iPhone signing preflight failed in this runner session; "
+                         "check the runner service's login-keychain and private-key access") from error
+
+
 def verify_bundle(info, profile, entitlements, bundle, team, version, build):
     expected = {"CFBundleIdentifier": bundle, "CFBundleShortVersionString": version,
                 "CFBundleVersion": str(build), "UIDeviceFamily": [1], "MinimumOSVersion": "15.0"}
@@ -91,7 +111,8 @@ def main():
     certificate = config["certificate"]
     if not certificate.startswith("Apple Distribution: ") or not certificate.endswith(f"({team})"):
         parser.error("Configure the exact Apple Distribution certificate common name")
-    identities = run("security", "find-identity", "-v", "-p", "codesigning", capture=True).decode()
+    keychain = Path.home() / "Library/Keychains/login.keychain-db"
+    identities = run("security", "find-identity", "-v", "-p", "codesigning", keychain, capture=True).decode()
     matches = re.findall(r'([A-Fa-f0-9]{40})\s+"' + re.escape(certificate) + r'"', identities)
     if len(set(matches)) != 1:
         parser.error("Expected one valid configured Apple Distribution identity with a private key")
@@ -101,6 +122,7 @@ def main():
     if int(re.search(r"Xcode (\d+)", xcode)[1]) < 26 or int(sdk.split(".")[0]) < 26:
         parser.error("Install/select Xcode 26+ and the iOS 26+ SDK before packaging")
     env = os.environ.copy()
+    env["MUSICALC_IOS_SIGNING_KEYCHAIN"] = str(keychain)
     if args.upload:
         for key in ("app_id", "api_key_id", "api_issuer_id", "key_directory"):
             if not config.get(key):
@@ -116,6 +138,7 @@ def main():
         except ValueError as error:
             parser.error(str(error))
         env["API_PRIVATE_KEYS_DIR"] = str(key_directory)
+    verify_signing_identity(identity, keychain)
     data = current()
     version = data["marketing_version"]
     tool = ROOT / "build/.cache/fyne-ios"
@@ -132,7 +155,7 @@ def main():
     run(sys.executable, ROOT / "build/scripts/prepare-ios-tool.py")
     run(tool, "release", "--os", "ios", "--name", "MusiCalc", "--app-id", bundle,
         "--app-version", version, "--app-build", build, "--icon", icon,
-        "--certificate", certificate, "--profile", config["profile"])
+        "--certificate", certificate, "--profile", config["profile"], env=env)
     original = ROOT / "MusiCalc.ipa"
     cache = ROOT / "build/.cache"
     with tempfile.TemporaryDirectory(prefix="ipa-", dir=cache) as temporary:
@@ -150,7 +173,7 @@ def main():
         shutil.copy2(ROOT / "build/packaging/PrivacyInfo.xcprivacy", app / "PrivacyInfo.xcprivacy")
         entitlement_file = stage / "entitlements.plist"
         entitlement_file.write_bytes(entitlements)
-        run("codesign", "--force", "--sign", identity, "--entitlements", entitlement_file,
+        run("codesign", "--force", "--sign", identity, "--keychain", keychain, "--entitlements", entitlement_file,
             "--generate-entitlement-der", app)
         run("codesign", "--verify", "--deep", "--strict", app)
         run("plutil", "-lint", app / "PrivacyInfo.xcprivacy")
