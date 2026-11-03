@@ -187,6 +187,65 @@ class BuildFlowTests(unittest.TestCase):
         release = next(call for call in self.run.call_args_list if len(call.args) > 1 and call.args[1] == "release")
         self.assertEqual(release.kwargs["env"]["MUSICALC_IOS_SIGNING_KEYCHAIN"], str(keychain))
 
+    def test_packaging_temp_stays_on_checkout_volume_and_cleans_failed_retries(self):
+        cache = module.ROOT / "build/.cache"
+        cache.mkdir(parents=True)
+        sentinel = cache / "unrelated"
+        sentinel.write_text("keep", encoding="utf-8")
+        workspaces = []
+        inherited_temp = self.home / "system temporary"
+        inherited_temp.mkdir()
+
+        def observe_release(*args, **kwargs):
+            if len(args) > 1 and args[1] == "release":
+                workspace = Path(kwargs["env"]["TMPDIR"])
+                self.assertEqual(workspace.parent, cache)
+                self.assertTrue(workspace.is_dir())
+                self.assertEqual(workspace.stat().st_dev, module.ROOT.stat().st_dev)
+                (workspace / "partial app").write_bytes(b"partial package")
+                self.assertEqual(module.os.environ["TMPDIR"], str(inherited_temp))
+                workspaces.append(workspace)
+            return self.run_command(*args, **kwargs)
+
+        self.run.side_effect = observe_release
+        with patch.dict(module.os.environ, {"TMPDIR": str(inherited_temp)}):
+            self.package()
+            self.package()
+            self.assertEqual(module.os.environ["TMPDIR"], str(inherited_temp))
+        self.assertEqual(len(set(workspaces)), 2)
+        self.assertTrue(all(not directory.exists() for directory in workspaces))
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
+        self.assertTrue(inherited_temp.is_dir())
+
+    def test_successful_release_cleans_temp_before_ipa_verification_and_keeps_upload_env(self):
+        workspaces = []
+
+        def release_then_stop_at_verification(*args, **kwargs):
+            if len(args) > 1 and args[1] == "release":
+                environment = kwargs["env"]
+                workspace = Path(environment["TMPDIR"])
+                self.assertTrue(workspace.is_dir())
+                self.assertEqual(environment["API_PRIVATE_KEYS_DIR"], self.config["key_directory"])
+                self.assertEqual(environment["MUSICALC_IOS_SIGNING_KEYCHAIN"],
+                                 str(self.home / "Library/Keychains/login.keychain-db"))
+                self.assertEqual(environment["UNCHANGED_PARENT_SETTING"], "preserved")
+                workspaces.append(workspace)
+                return b""
+            if args[:3] == ("ditto", "-x", "-k"):
+                self.assertEqual(len(workspaces), 1)
+                self.assertFalse(workspaces[0].exists())
+                self.assertEqual(kwargs.get("env"), None)
+                raise RuntimeError("IPA verification boundary")
+            return self.run_command(*args, **kwargs)
+
+        self.run.side_effect = release_then_stop_at_verification
+        with patch.object(module.sys, "argv", ["build-ios.py", "--upload"]), \
+             patch.dict(module.os.environ, {"UNCHANGED_PARENT_SETTING": "preserved"}), \
+             self.assertRaisesRegex(RuntimeError, "IPA verification boundary"):
+            module.main()
+        self.assertEqual(len(workspaces), 1)
+        self.assertFalse(workspaces[0].exists())
+
     def test_icon_preflight_failure_does_not_start_packaging(self):
         self.icon_fails = True
         with self.assertRaisesRegex(RuntimeError, "icon failed"):

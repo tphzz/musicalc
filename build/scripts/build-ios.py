@@ -152,9 +152,13 @@ def main():
             parser.error(f"Generated build {build} is not newer than App Store build {previous}; check the runner UTC clock")
     print(f"Building iPhone {version} build {build}", flush=True)
     run(sys.executable, ROOT / "build/scripts/prepare-ios-tool.py")
-    run(tool, "release", "--os", "ios", "--name", "MusiCalc", "--app-id", bundle,
-        "--app-version", version, "--app-build", build, "--icon", icon,
-        "--certificate", certificate, "--profile", config["profile"], env=env)
+    # Fyne renames its temporary app into the checkout, which requires one filesystem.
+    with tempfile.TemporaryDirectory(prefix="ios-package-", dir=tool.parent) as temporary:
+        package_env = env.copy()
+        package_env["TMPDIR"] = temporary
+        run(tool, "release", "--os", "ios", "--name", "MusiCalc", "--app-id", bundle,
+            "--app-version", version, "--app-build", build, "--icon", icon,
+            "--certificate", certificate, "--profile", config["profile"], env=package_env)
     original = ROOT / "MusiCalc.ipa"
     cache = ROOT / "build/.cache"
     with tempfile.TemporaryDirectory(prefix="ipa-", dir=cache) as temporary:

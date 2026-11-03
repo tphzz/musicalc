@@ -105,6 +105,33 @@ context. If it passes and Xcode signing fails, retain the Xcode CodeSign command
 and error. See [Apple's execution-context guidance](https://developer.apple.com/forums/thread/712005)
 and [GitHub's macOS runner-service diagnostics](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/monitor-and-troubleshoot?platform=mac).
 
+## Headless runner certificate chain
+
+A non-admin runner can sign from a LaunchDaemon using its file-based login
+keychain without logging into the Mac desktop. Keep the signing identity and
+private key in that runner's keychain, with the unlock/access setup above.
+See [Apple's file-based keychain guidance](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains).
+
+If signing works interactively but the Actions preflight reports
+`unable to build chain to self-signed root`, check the certificate's issuer and
+whether its Apple intermediate certificate is available in the System keychain.
+For an Apple Distribution identity issued by **WWDR G3**, run this one-time
+installation from an administrator's terminal:
+
+~~~bash
+(
+  wwdr_certificate="$(mktemp -t musicalc-wwdr)" || exit
+  trap 'rm -f "$wwdr_certificate"' EXIT
+  curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o "$wwdr_certificate" &&
+    sudo security import "$wwdr_certificate" -k /Library/Keychains/System.keychain
+)
+~~~
+
+This installs Apple's public intermediate certificate with normal trust
+evaluation. The runner account keeps its existing privileges and private key.
+Retry with upload disabled and use the signing preflight in the actual service
+session to confirm access. See [Apple's WWDR intermediate certificate guidance](https://developer.apple.com/help/account/certificates/wwdr-intermediate-certificates/).
+
 ## iOS signing and notarization
 
 The current iPhone workflow distributes through **App Store Connect / TestFlight**.
@@ -298,6 +325,13 @@ for consistent iOS 15 deployment targets, iPhone device family, and preservation
 of Xcode's concrete distribution entitlements. The module cache is never edited.
 The metadata-injection patch returns an error on failure and removes the import
 that became unused when replacing the upstream logging call.
+
+The packager gives the Fyne release process a disposable `TMPDIR` under
+`build/.cache/` on the checkout's volume. Fyne moves its built app into the
+checkout using a filesystem rename; the default macOS temporary directory can
+be on a different volume when the checkout is on an external disk. The
+workspace is removed after success or failure, and the override applies only
+to packaging and its child processes. Final IPAs remain under `build/dist/ios/`.
 
 Validate changes to this patch by compiling the complete helper from the public
 checkout root, without signing or uploading:
