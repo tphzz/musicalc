@@ -56,6 +56,30 @@ bash build/scripts/build-macos.sh
 MUSICALC_NOTARIZE=true bash build/scripts/build-macos.sh
 ~~~
 
+## Signing keychain lifetime
+
+Both Apple workflows use [apple-signing.sh](../scripts/apple-signing.sh) to unlock
+the runner's login keychain, set its automatic-lock timeout to **two hours
+(7200 seconds)**, and grant signing access. Locking on system sleep remains enabled.
+This updates the keychain's saved settings; each signing run applies them again.
+The timeout covers the Apple jobs' 90-minute limit, including compilation and
+notarization waits. Any unlock, timeout-setting, or access-setting error stops
+packaging. The password still comes from the runner-owned mode-600 file above.
+
+A valid certificate chain does not prove that its private key is accessible.
+If signing fails with `errSecInternalComponent`, test an immediate unlock and
+signing retry as the runner account. For manual builds, set the same bounded
+policy before starting (the first command prompts locally for the keychain
+password):
+
+~~~bash
+security unlock-keychain "$HOME/Library/Keychains/login.keychain-db" &&
+security set-keychain-settings -lut 7200 "$HOME/Library/Keychains/login.keychain-db"
+~~~
+
+See [Apple's keychain/signing troubleshooting](https://developer.apple.com/forums/thread/712005)
+and the [security command's settings options](https://github.com/apple-oss-distributions/Security/blob/main/SecurityTool/macOS/security.c).
+
 ## iOS signing and notarization
 
 The current iPhone workflow distributes through **App Store Connect / TestFlight**.
