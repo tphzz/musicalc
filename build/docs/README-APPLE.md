@@ -94,8 +94,9 @@ keychain search list and login-keychain settings, then signs and verifies a
 temporary copy of `/usr/bin/true` using the configured identity and explicit
 keychain. It does not execute that copy. A failure stops before icon generation,
 build-number generation, App Store Connect queries or tool compilation. The
-check uses disposable data under `build/.cache/` and prints no passwords or
-private-key data.
+check copies file contents without system metadata, uses disposable data under
+`build/.cache/`, and prints no passwords or private-key data. Original copy/sign/
+verify error details remain visible on failure.
 
 A successful interactive-terminal signing test does not establish that a runner
 service has the same keychain access. If the preflight fails only in Actions,

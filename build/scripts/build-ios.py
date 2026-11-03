@@ -35,13 +35,12 @@ def verify_signing_identity(identity, keychain):
         run("security", "show-keychain-info", keychain)
         with tempfile.TemporaryDirectory(prefix="ios-signing-", dir=cache) as temporary:
             probe = Path(temporary) / "signing-probe"
-            shutil.copy2("/usr/bin/true", probe)
+            shutil.copyfile("/usr/bin/true", probe)
             run("codesign", "--force", "--sign", identity, "--keychain", keychain,
                 "--timestamp=none", probe)
             run("codesign", "--verify", "--strict", probe)
     except (OSError, subprocess.SubprocessError) as error:
-        raise ValueError("iPhone signing preflight failed in this runner session; "
-                         "check the runner service's login-keychain and private-key access") from error
+        raise ValueError(f"iPhone signing preflight failed in this runner session: {error}") from error
 
 
 def verify_bundle(info, profile, entitlements, bundle, team, version, build):

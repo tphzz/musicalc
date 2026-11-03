@@ -47,7 +47,7 @@ class BuildFlowTests(unittest.TestCase):
         self.run = stack.enter_context(patch.object(module, "run", side_effect=self.run_command))
         self.icon_fails = False
         self.signing_fails = False
-        stack.enter_context(patch.object(module.shutil, "copy2", side_effect=lambda src, dst: Path(dst).write_bytes(b"signing probe")))
+        stack.enter_context(patch.object(module.shutil, "copyfile", side_effect=lambda src, dst: Path(dst).write_bytes(b"signing probe")))
 
     def save_config(self):
         (self.directory / "config.json").write_text(json.dumps(self.config), encoding="utf-8")
@@ -194,6 +194,53 @@ class BuildFlowTests(unittest.TestCase):
         self.number.assert_not_called()
         self.remote.assert_not_called()
         self.assertFalse((self.directory / "build-numbers.json").exists())
+
+
+class SigningPreflightTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="musicalc signing ")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.fixture = self.root / "source"
+        self.fixture.write_bytes(b"probe binary fixture")
+        self.real_copyfile = module.shutil.copyfile
+        self.failure = ""
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(patch.object(module, "ROOT", self.root))
+        stack.enter_context(patch.object(module, "run", side_effect=self.run_command))
+        stack.enter_context(patch.object(module.shutil, "copyfile", side_effect=self.copy_probe))
+        # A protected system binary's metadata is unnecessary for this test copy.
+        stack.enter_context(patch.object(module.shutil, "copystat", side_effect=PermissionError("system metadata denied")))
+
+    def copy_probe(self, source, destination):
+        if self.failure == "copy":
+            raise PermissionError("probe copy denied")
+        self.assertEqual(source, "/usr/bin/true")
+        return self.real_copyfile(self.fixture, destination)
+
+    def run_command(self, *args, **kwargs):
+        if args[0] == "codesign":
+            self.assertEqual(Path(args[-1]).read_bytes(), b"probe binary fixture")
+            if self.failure == "sign" and args[1] == "--force":
+                raise subprocess.CalledProcessError(78, list(args))
+            if self.failure == "verify" and args[1] == "--verify":
+                raise subprocess.CalledProcessError(79, list(args))
+        return b""
+
+    def test_probe_needs_no_system_metadata_and_cleans_up(self):
+        module.verify_signing_identity("A" * 40, self.root / "login keychain.db")
+        self.assertEqual(list((self.root / "build/.cache").iterdir()), [])
+
+    def test_copy_sign_and_verify_errors_retain_cause_and_clean_up(self):
+        for operation, message in [("copy", "probe copy denied"),
+                                   ("sign", "exit status 78"), ("verify", "exit status 79")]:
+            with self.subTest(operation=operation):
+                self.failure = operation
+                with self.assertRaisesRegex(ValueError, message) as stopped:
+                    module.verify_signing_identity("A" * 40, self.root / "login keychain.db")
+                self.assertIsNotNone(stopped.exception.__cause__)
+                self.assertEqual(list((self.root / "build/.cache").iterdir()), [])
 
 
 if __name__ == "__main__":
