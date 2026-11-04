@@ -52,8 +52,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Cannot resolve Git worktree" }
     $metadata = python (Join-Path $scriptDir 'version.py') | ConvertFrom-Json
     if ($LASTEXITCODE -ne 0) { throw "Version resolution failed" }
-    go build -trimpath -ldflags="-s -w -H=windowsgui -X main.version=$($metadata.version)" -o (Join-Path $distDir $filename)
+    # Zig requires the GUI subsystem explicitly at the external link step.
+    go build -trimpath -ldflags="-s -w -H=windowsgui -extldflags=-Wl,--subsystem,windows -X main.version=$($metadata.version)" -o (Join-Path $distDir $filename)
     if ($LASTEXITCODE -ne 0) { throw "Windows build failed with exit code $LASTEXITCODE" }
+    python (Join-Path $scriptDir 'windows_binary.py') (Join-Path $distDir $filename) $Arch
+    if ($LASTEXITCODE -ne 0) { throw "Windows binary verification failed with exit code $LASTEXITCODE" }
 } finally {
     foreach ($name in $previousEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], "Process")

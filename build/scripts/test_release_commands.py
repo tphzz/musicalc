@@ -62,6 +62,7 @@ class CommandTests(unittest.TestCase):
                      patch.object(platform.subprocess, "check_output", side_effect=[f"windows\n{arch}\n", zig_version + "\n"]), \
                      patch.object(platform.shutil, "which", side_effect=lambda name: "zig" if name == "zig" else None), \
                      patch.object(platform.shutil, "copy2"), \
+                     patch.object(platform, "verify_windows_binary"), \
                      patch.object(platform, "git", side_effect=[str(platform.ROOT / ".git"), str(platform.ROOT)]), \
                      patch.dict(os.environ, {"GOFLAGS": ""}), \
                      patch.object(platform, "run") as run:

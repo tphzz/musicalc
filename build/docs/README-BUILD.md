@@ -68,6 +68,26 @@
    .\build\dist\musicalc_arm64.exe
    ```
 
+### Windows GUI startup
+
+Both Windows targets are linked as GUI applications, so opening the EXE or its
+installer shortcut starts the calculator without a console window. Go's
+`-H=windowsgui` flag alone is insufficient with the current Zig external linker;
+the builders also pass `-extldflags=-Wl,--subsystem,windows`.
+
+The local builder and native CI helper verify the output's PE32+ header, target
+architecture and Windows GUI subsystem before accepting it. To inspect an EXE
+without running it:
+
+~~~powershell
+python build/scripts/windows_binary.py build/dist/musicalc.exe amd64
+python build/scripts/windows_binary.py build/dist/musicalc_arm64.exe arm64
+~~~
+
+A missing, malformed, wrong-architecture or console executable fails the build.
+The checker uses only Python's standard library. `--version` remains available
+to scripts that capture or pipe output.
+
 ### Standalone Windows executable
 
 The EXE embeds application assets/help. End users need the supported Windows OS

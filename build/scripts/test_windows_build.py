@@ -13,7 +13,7 @@ POWERSHELL = shutil.which("powershell")
 
 @unittest.skipUnless(os.name == "nt" and POWERSHELL, "requires Windows PowerShell")
 class WindowsBuildTests(unittest.TestCase):
-    def run_builder(self, arch, zig_version="0.16.0", build_status=0):
+    def run_builder(self, arch, zig_version="0.16.0", build_status=0, check_status=0):
         with tempfile.TemporaryDirectory(prefix="musicalc windows build ") as temporary:
             root = Path(temporary)
             builder = root / "build/scripts/build-win.ps1"
@@ -23,7 +23,14 @@ class WindowsBuildTests(unittest.TestCase):
             harness.write_text("""
 $ErrorActionPreference = "Stop"
 function zig { $global:LASTEXITCODE = 0; $env:MUSICALC_TEST_ZIG_VERSION }
-function python { $global:LASTEXITCODE = 0; '{"version":"0.9.0"}' }
+function python {
+    if ((Split-Path -Leaf $args[0]) -eq "version.py") {
+        $global:LASTEXITCODE = 0; '{"version":"0.9.0"}'
+    } else {
+        @{ checker_arguments = @($args) } | ConvertTo-Json -Compress
+        $global:LASTEXITCODE = [int]$env:MUSICALC_TEST_CHECK_STATUS
+    }
+}
 function git {
     $global:LASTEXITCODE = 0
     if ($args[-1] -eq "--absolute-git-dir") { Join-Path $env:MUSICALC_TEST_ROOT ".git" }
@@ -58,7 +65,8 @@ exit $status
                 [POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(harness)],
                 env={**os.environ, "MUSICALC_TEST_BUILDER": str(builder), "MUSICALC_TEST_ARCH": arch,
                      "MUSICALC_TEST_ROOT": str(root),
-                     "MUSICALC_TEST_ZIG_VERSION": zig_version, "MUSICALC_TEST_BUILD_STATUS": str(build_status)},
+                     "MUSICALC_TEST_ZIG_VERSION": zig_version, "MUSICALC_TEST_BUILD_STATUS": str(build_status),
+                     "MUSICALC_TEST_CHECK_STATUS": str(check_status)},
                 capture_output=True, text=True, timeout=30,
             )
 
@@ -71,7 +79,14 @@ exit $status
                 with self.subTest(arch=arch, zig_version=zig_version):
                     result = self.run_builder(arch, zig_version=zig_version)
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    data = json.loads(result.stdout)
+                    events = [json.loads(line) for line in result.stdout.splitlines()]
+                    self.assertEqual(len(events), 2, "Expected compilation followed by PE verification")
+                    data = events[0]
+                    self.assertIn("-extldflags=-Wl,--subsystem,windows", " ".join(data["arguments"]))
+                    checker = events[1]["checker_arguments"]
+                    self.assertEqual(Path(checker[0]).name, "windows_binary.py")
+                    self.assertEqual(checker[1], data["arguments"][-1])
+                    self.assertEqual(checker[2], arch)
                     self.assertEqual(data["CC"], f"zig cc -target {target}-windows-gnu")
                     self.assertEqual(data["CXX"], f"zig c++ -target {target}-windows-gnu")
                     self.assertEqual((data["GOOS"], data["GOARCH"]), ("windows", arch))
@@ -91,6 +106,11 @@ exit $status
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Expected Zig 0.16.0 or 0.17.0", result.stderr)
                 self.assertEqual(result.stdout.strip(), "")
+
+    def test_failed_binary_verification_is_reported(self):
+        result = self.run_builder("amd64", check_status=9)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("Windows binary verification failed with exit code 9", result.stderr)
 
     def test_failed_compilation_is_reported(self):
         result = self.run_builder("arm64", build_status=7)

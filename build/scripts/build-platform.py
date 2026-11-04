@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from version import ROOT, current, git
+from windows_binary import verify_windows_binary
 
 
 def run(*args, env=None):
@@ -67,6 +68,7 @@ def main():
     run(*command, env=env)
     if args.platform == "windows":
         source = ROOT / "build/dist" / ("musicalc_x64.exe" if args.arch == "amd64" else "musicalc_arm64.exe")
+        verify_windows_binary(source, args.arch)
         target = ROOT / "build/dist" / f"musicalc_{data['version']}_windows_{args.arch}.exe"
         shutil.copy2(source, target)
 

@@ -17,8 +17,9 @@ builds:
     goos: [windows]
     goarch: [amd64]
     goamd64: [v3]
+    # Zig requires the GUI subsystem explicitly at the external link step.
     ldflags:
-      - -s -w -H=windowsgui -X main.version={{ .Version }}
+      - -s -w -H=windowsgui -extldflags=-Wl,--subsystem,windows -X main.version={{ .Version }}
     binary: musicalc_x64
     # This keeps the binary at the top level of the dist folder
     no_unique_dist_dir: true
@@ -34,7 +35,7 @@ builds:
     goos: [windows]
     goarch: [arm64]
     ldflags:
-      - -s -w -H=windowsgui -X main.version={{ .Version }}
+      - -s -w -H=windowsgui -extldflags=-Wl,--subsystem,windows -X main.version={{ .Version }}
     binary: musicalc_arm64
     no_unique_dist_dir: true
 

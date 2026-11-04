@@ -62,6 +62,10 @@ packaging and passes absolute cache paths under build/.cache to GoReleaser. The 
 paths and the selected Git checkout from the helper. Use the build entry points
 for Go 1.26 submodule/worktree builds so VCS stamping follows that checkout.
 
+Windows builds explicitly select the GUI subsystem in Zig's external linker and
+verify the executable header before packaging. The installer launches those
+checked EXEs directly. See [console-free startup and manual PE checks](README-BUILD.md#windows-gui-startup).
+
 ## Linux runner images
 
 The Linux jobs build natively on Ubuntu 22.04 (Jammy), one image for amd64 and one
