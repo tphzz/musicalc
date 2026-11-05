@@ -1,10 +1,12 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+$')]
+    [ValidatePattern('^[0-9]+\.[0-9]+(?:\.[0-9]+)?\z')]
     [string]$Version,
     [string]$PythonPath
 )
 $ErrorActionPreference = "Stop"
+# Keep older three-part arguments usable while allowing patch updates within the series.
+$versionSeries = (($Version.Split('.'))[0..1] -join '.')
 
 # Select the all-users installation independently of PATH and Actions tool caches.
 $pythonCandidates = @($PythonPath)
@@ -21,7 +23,7 @@ if (-not $PythonPath) {
 $PythonPath = $pythonCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 if (-not $PythonPath) {
     $locations = "'" + ($pythonCandidates -join "' or '") + "'"
-    throw "Install Python $Version (64-bit) for all users at $locations. See build/docs/README-INSTALLER.md#windows-python-installation."
+    throw "Install Python $versionSeries.x (64-bit) for all users at $locations. See build/docs/README-INSTALLER.md#windows-python-installation."
 }
 $PythonPath = (Resolve-Path -LiteralPath $PythonPath).Path
 # Single-quoted Python literals survive Windows PowerShell's native argument quoting.
@@ -39,8 +41,10 @@ try {
 } catch {
     throw "System Python returned invalid version information at '$PythonPath'. Repair the all-users installation."
 }
-if ($details.version -cne $Version) {
-    throw "System Python version mismatch: expected $Version, found $($details.version) at '$PythonPath'."
+$actualVersion = [string]$details.version
+$seriesPattern = '^' + [regex]::Escape($versionSeries) + '\.[0-9]+\z'
+if ($actualVersion -cnotmatch $seriesPattern) {
+    throw "System Python version mismatch: expected $versionSeries.x, found $actualVersion at '$PythonPath'."
 }
 if ($details.bits -ne 64) {
     throw "System Python must be 64-bit; found $($details.bits)-bit at '$PythonPath'."
@@ -56,4 +60,4 @@ $env:PATH = ($paths -join [IO.Path]::PathSeparator) + [IO.Path]::PathSeparator +
 if ($env:GITHUB_PATH) {
     Add-Content -LiteralPath $env:GITHUB_PATH -Value $paths -Encoding utf8
 }
-Write-Host "Using system Python $Version (64-bit): $PythonPath"
+Write-Host "Using system Python $actualVersion (64-bit): $PythonPath"

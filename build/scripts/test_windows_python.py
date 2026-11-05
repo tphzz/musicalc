@@ -49,12 +49,24 @@ class SystemPythonTests(unittest.TestCase):
         self.assertEqual(exported, ["existing"])
 
     def test_wrong_version_is_rejected_without_exporting(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            result, exported = self.run_helper(Path(temporary), sys.executable, "0.0.0")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(f"found {VERSION}", result.stderr)
-        self.assertIn("expected 0.0.0", result.stderr)
-        self.assertEqual(exported, ["existing"])
+        major, minor = sys.version_info[:2]
+        for requested in ("0.0", f"{major}.{minor - 1}", f"{major}.{minor + 1}",
+                          f"{major + 1}.{minor}", f"{major}.{minor}0"):
+            with self.subTest(requested=requested), tempfile.TemporaryDirectory() as temporary:
+                result, exported = self.run_helper(Path(temporary), sys.executable, requested)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f"found {VERSION}", result.stderr)
+            self.assertIn(f"expected {requested}.x", result.stderr)
+            self.assertEqual(exported, ["existing"])
+
+    def test_patch_updates_are_accepted_and_actual_version_is_reported(self):
+        series = ".".join(map(str, sys.version_info[:2]))
+        for requested in (series, series + ".0", series + ".999"):
+            with self.subTest(requested=requested), tempfile.TemporaryDirectory() as temporary:
+                result, exported = self.run_helper(Path(temporary), sys.executable, requested)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"Using system Python {VERSION}", result.stdout)
+            self.assertEqual(exported[1], str(Path(sys.executable).parent))
 
     def test_default_location_does_not_fall_back_to_path_or_a_runner_cache(self):
         with tempfile.TemporaryDirectory(prefix="musicalc Program Files ") as temporary:
@@ -102,8 +114,9 @@ class SystemPythonLocationTests(unittest.TestCase):
         cls.fixture = tempfile.TemporaryDirectory(prefix="musicalc python probe ")
         cls.addClassCleanup(cls.fixture.cleanup)
         cls.probe = Path(cls.fixture.name) / "python.exe"
+        probe_version = ".".join(map(str, sys.version_info[:2])) + ".17"
         source = ('public class Probe { public static void Main() { '
-                  'System.Console.WriteLine(@"{""version"":""' + VERSION +
+                  'System.Console.WriteLine(@"{""version"":""' + probe_version +
                   '"",""bits"":64}"); } }')
         result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
             "Add-Type -TypeDefinition $env:MUSICALC_TEST_PROBE_SOURCE "
@@ -196,7 +209,7 @@ class WindowsPythonWorkflowTests(unittest.TestCase):
                 self.assertEqual(len(selection), 1, "Windows job must select system Python")
                 self.assertIn("shell: powershell", selection[0])
                 self.assertNotIn("shell: pwsh", text)
-                self.assertIn('-Version "3.13.14"', selection[0])
+                self.assertIn('-Version "3.13"', selection[0])
                 setup = [step for step in steps if "actions/setup-python@" in step]
                 if name == "native-platform.yml":
                     self.assertIn("if: runner.os == 'Windows'", selection[0])

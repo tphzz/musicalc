@@ -12,7 +12,7 @@
 
 2. **Install the build runtimes**
 
-   Use Go **1.26.2** and Python **3.13.14**. Windows Actions use a preinstalled
+   Use Go **1.26.2** and 64-bit Python **3.13.x**. Windows Actions use a preinstalled
    all-users Python; see [runner setup](README-INSTALLER.md#windows-python-installation).
 
 3. **Extract Zig 0.17.0**

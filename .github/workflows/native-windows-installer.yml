@@ -15,7 +15,7 @@ jobs:
           fetch-depth: 0
       - name: Select system Python
         shell: powershell
-        run: ./build/scripts/use-system-python.ps1 -Version "3.13.14"
+        run: ./build/scripts/use-system-python.ps1 -Version "3.13"
       - name: Resolve version
         shell: powershell
         run: python build/scripts/version.py --github
