@@ -7,12 +7,21 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Select the all-users installation independently of PATH and Actions tool caches.
+$pythonCandidates = @($PythonPath)
 if (-not $PythonPath) {
     $directoryName = "Python" + (($Version.Split('.'))[0..1] -join '')
-    $PythonPath = Join-Path $env:ProgramFiles "$directoryName/python.exe"
+    $directoryNames = @($directoryName, "$directoryName-arm64")
+    if ($env:RUNNER_ARCH -eq 'ARM64' -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+        $directoryNames = @("$directoryName-arm64", $directoryName)
+    }
+    $pythonCandidates = @(foreach ($name in $directoryNames) {
+        Join-Path $env:ProgramFiles "$name/python.exe"
+    })
 }
-if (-not (Test-Path -LiteralPath $PythonPath -PathType Leaf)) {
-    throw "Install Python $Version (64-bit) for all users at '$PythonPath'. See build/docs/README-INSTALLER.md#windows-python-installation."
+$PythonPath = $pythonCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if (-not $PythonPath) {
+    $locations = "'" + ($pythonCandidates -join "' or '") + "'"
+    throw "Install Python $Version (64-bit) for all users at $locations. See build/docs/README-INSTALLER.md#windows-python-installation."
 }
 $PythonPath = (Resolve-Path -LiteralPath $PythonPath).Path
 # Single-quoted Python literals survive Windows PowerShell's native argument quoting.

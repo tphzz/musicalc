@@ -35,7 +35,8 @@ The workflows use these existing self-hosted labels:
 
 Actions select Go **1.26.2** and GoReleaser **2.15.4**. All platforms use Python
 **3.13.14**. Windows jobs select a preinstalled, all-users 64-bit Python from
-`C:\Program Files\Python313\python.exe`; they never invoke `setup-python` or
+`C:\Program Files\Python313\python.exe` or
+`C:\Program Files\Python313-arm64\python.exe`; they never invoke `setup-python` or
 install/repair Python during a build. Linux and Apple retain `setup-python`.
 Fyne packaging uses **1.7.3**, with the checked-in iPhone compatibility patch.
 System compiler/mobile prerequisites are not installed by builds. See
@@ -174,6 +175,11 @@ runtime version and 64-bit interpreter before adding its directory and Scripts t
 job PATH. A missing, broken, 32-bit or mismatched interpreter fails with a setup
 message; nothing is installed or changed in the registry by that helper. It selects
 Program Files directly, independently of user PATH and Actions tool caches.
+It checks `Python313` and `Python313-arm64`, preferring the ARM64 folder on an
+ARM64 runner or native ARM64 PowerShell. The unsuffixed installation remains
+supported on ARM64 hosts. An explicit `-PythonPath` takes precedence. Once an
+existing interpreter is selected, version/bitness/execution failures stop the
+job; the helper does not silently choose another interpreter.
 
 1. Wait for the Windows runners to be idle and stop their services. If Python 3.13
    is registered to an old runner tool-cache directory, remove that installation
@@ -182,7 +188,8 @@ Program Files directly, independently of user PATH and Actions tool caches.
    keys manually does not perform an uninstall.
 2. Download the [official Python 3.13.14 full installer](https://www.python.org/downloads/release/python-31314/)
    matching the host architecture. Use Customize installation, install for all
-   users, and choose `C:\Program Files\Python313`. The full installer supports
+   users, and choose `C:\Program Files\Python313` for x64 or
+   `C:\Program Files\Python313-arm64` for ARM64. The full installer supports
    [all-users installation](https://docs.python.org/3.13/using/windows.html#installation-steps).
    For an **x64 host**, these Administrator PowerShell one-liners download, verify
    and install the published installer:
@@ -203,6 +210,8 @@ the same official release page.
 
 ~~~powershell
 & 'C:\Program Files\Python313\python.exe' --version
+# On ARM64, use the ARM64 installation path instead:
+# & 'C:\Program Files\Python313-arm64\python.exe' --version
 ./build/scripts/use-system-python.ps1 -Version "3.13.14"
 ~~~
 
