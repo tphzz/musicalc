@@ -355,14 +355,30 @@ value out of files/logs and renew it before expiry. Only the final release step
 receives it; checkout and artifact downloads use the built-in token.
 See [GitHub's release API permissions](https://docs.github.com/en/rest/releases/releases#create-a-release).
 
-Draft preparation requires both Windows EXEs, the dual-architecture installer,
-both Linux architectures in TAR/DEB/RPM formats, the universal macOS app ZIP/DMG
-and Android ARM64 APK. It rejects missing, duplicate, empty or unexpected files
-and adds SHA-256 checksums. The iPhone IPA is excluded.
+Draft preparation validates all twelve build packages, rejecting missing,
+duplicate, empty or unexpected files, then uploads these nine packages:
+
+| Platform | GitHub release downloads |
+|---|---|
+| Windows | One installer containing both x64 and ARM64 binaries |
+| macOS | Universal DMG |
+| Linux x64 and ARM64 | TAR.GZ, DEB and RPM for each architecture |
+| Android | ARM64 APK |
+
+Standalone Windows EXEs remain Actions artifacts and supply the dual-architecture
+installer. The macOS app ZIP also remains a build output/Actions artifact. Those
+three files and the iPhone IPA are excluded from GitHub release uploads.
+
+GitHub automatically displays a SHA-256 digest beside each uploaded asset;
+the publisher no longer generates or uploads a separate SHA256SUMS.txt file.
+An existing manifest from an older local publisher run is ignored and left
+untouched. Local hashing and remote size/digest verification remain in place.
+See [GitHub's release asset digests](https://github.blog/changelog/2025-06-03-releases-now-expose-digests-for-release-assets/).
 
 Branch refreshes are visibly marked **incomplete** until uploads, remote inventory
 verification and removal of obsolete filenames finish. New assets upload before
-obsolete files are removed. Same-commit reruns replace same-named assets too;
+obsolete files are removed, including standalone EXEs, app ZIPs and checksum
+manifests uploaded by older publisher versions. Same-commit reruns replace same-named assets too;
 this is not an atomic replacement. If a refresh fails, rerun the draft job to
 repair it. A failed initial tag upload removes only its newly created draft,
 retaining the Git tag. If cancellation, connection loss or permissions prevent
@@ -394,8 +410,8 @@ git push origin refs/tags/0.9.0:refs/tags/0.9.0
 
 Run **00 Full - All Platforms** manually against that tag. Tagged macOS packages
 must be signed and notarized. After all platforms succeed, the final job creates
-a **draft** GitHub release containing Windows, Linux, macOS and Android assets
-plus SHA-256 checksums, or preserves the existing release for that tag.
+a **draft** GitHub release containing the nine selected packages with GitHub's
+per-asset SHA-256 digests, or preserves the existing release for that tag.
 Publishing the reviewed draft is a separate user action.
 
 The iPhone IPA is an Actions artifact and uses App Store Connect/TestFlight,

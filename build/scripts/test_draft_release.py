@@ -32,8 +32,18 @@ def package_names(version):
     }
 
 
+def release_package_names(version):
+    return {
+        f"musicalc-setup-{version}.exe", f"musicalc_{version}_universal.dmg",
+        f"musicalc_{version}_android_arm64.apk", f"musicalc_{version}_linux_amd64v3.tar.gz",
+        f"musicalc_{version}_linux_arm64.tar.gz",
+        *(f"musicalc_{version}_{arch}.{extension}" for arch in ("amd64", "arm64")
+          for extension in ("deb", "rpm")),
+    }
+
+
 class GitHub:
-    """In-memory release API; file bytes exercise uploads and checksum verification."""
+    """In-memory release API; file bytes exercise uploads and asset digest verification."""
 
     def __init__(self):
         self.releases = []
@@ -154,7 +164,7 @@ class DraftReleaseTests(unittest.TestCase):
         self.data.update(version="0.9.0", release=True)
         self.write_packages()
 
-    def test_new_branch_draft_and_full_checksum_inventory(self):
+    def test_new_branch_uploads_nine_packages_and_keeps_all_build_inputs(self):
         output = self.run_draft()
         release = self.github.releases[0]
         self.assertEqual(release["tag_name"], "snapshot/main")
@@ -167,12 +177,12 @@ class DraftReleaseTests(unittest.TestCase):
         self.assertNotIn("incomplete", release["body"].lower())
         self.assertIn(release["html_url"], output)
         checksum = self.root / f"musicalc_{self.data['version']}_SHA256SUMS.txt"
-        lines = checksum.read_text().splitlines()
-        self.assertEqual(len(lines), 12)
-        for line in lines:
-            digest, name = line.split("  ")
-            self.assertEqual(digest, hashlib.sha256((self.root / name).read_bytes()).hexdigest())
-        self.assertEqual({asset["name"] for asset in release["assets"]}, package_names(self.data["version"]) | {checksum.name})
+        self.assertFalse(checksum.exists())
+        self.assertEqual({asset["name"] for asset in release["assets"]}, release_package_names(self.data["version"]))
+        self.assertEqual(len(release["assets"]), 9)
+        for asset in release["assets"]:
+            self.assertEqual(asset["digest"], "sha256:" + hashlib.sha256((self.root / asset["name"]).read_bytes()).hexdigest())
+        self.assertTrue(all((self.root / name).is_file() for name in package_names(self.data["version"])))
 
     def test_branch_refresh_removes_old_assets_and_retains_draft_identity(self):
         self.run_draft()
@@ -184,18 +194,18 @@ class DraftReleaseTests(unittest.TestCase):
         release = self.github.releases[0]
         self.assertEqual(release["id"], original)
         self.assertEqual(release["target_commitish"], "b" * 40)
-        self.assertEqual(len(release["assets"]), 13)
+        self.assertEqual({asset["name"] for asset in release["assets"]}, release_package_names(self.data["version"]))
         self.assertTrue(all("gaaaaaaa" not in asset["name"] for asset in release["assets"]))
 
-    def test_same_commit_branch_rerun_replaces_bytes_without_checksum_self_reference(self):
+    def test_same_commit_branch_rerun_replaces_bytes_without_a_checksum_manifest(self):
         self.run_draft()
-        path = self.root / next(iter(package_names(self.data["version"])))
+        path = self.root / next(iter(release_package_names(self.data["version"])))
         path.write_bytes(b"rebuilt output")
         self.run_draft()
         release = self.github.releases[0]
-        self.assertEqual(len(release["assets"]), 13)
+        self.assertEqual(len(release["assets"]), 9)
         self.assertEqual(next(asset for asset in release["assets"] if asset["name"] == path.name)["size"], 14)
-        self.assertEqual(len((self.root / f"musicalc_{self.data['version']}_SHA256SUMS.txt").read_text().splitlines()), 12)
+        self.assertFalse((self.root / f"musicalc_{self.data['version']}_SHA256SUMS.txt").exists())
 
     def test_branch_names_and_numeric_tag_have_separate_identities(self):
         for ref in ("main", "0.9.0", "feature/äudio", "feature-audio"):
@@ -214,6 +224,7 @@ class DraftReleaseTests(unittest.TestCase):
         self.assertEqual(release["tag_name"], "0.9.0")
         self.assertFalse(release["prerelease"])
         self.assertIn("Generated release notes", release["body"])
+        self.assertEqual({asset["name"] for asset in release["assets"]}, release_package_names(self.data["version"]))
         for published in (False, True):
             release["draft"] = not published
             before = copy.deepcopy(self.github.releases)
@@ -267,7 +278,7 @@ class DraftReleaseTests(unittest.TestCase):
         self.run_draft()
         self.assertEqual(self.github.releases[0]["target_commitish"], COMMIT)
 
-    def test_every_platform_package_is_required_before_any_mutation(self):
+    def test_every_build_package_is_required_before_any_mutation(self):
         for name in package_names(self.data["version"]):
             self.write_packages()
             (self.root / name).unlink()
@@ -302,7 +313,7 @@ class DraftReleaseTests(unittest.TestCase):
         self.assertIn("incomplete", self.github.releases[0]["body"].lower())
         self.assertTrue(old_names <= {asset["name"] for asset in self.github.releases[0]["assets"]})
         self.run_draft()
-        self.assertEqual(len(self.github.releases[0]["assets"]), 13)
+        self.assertEqual(len(self.github.releases[0]["assets"]), 9)
         self.assertNotIn("incomplete", self.github.releases[0]["body"].lower())
 
     def test_failed_new_tag_upload_removes_only_new_draft_and_preserves_git_tag(self):
@@ -353,8 +364,54 @@ class DraftReleaseTests(unittest.TestCase):
         release["assets"] = [dict(id=number + 100, name=f"old-{number}", size=1,
                                   state="uploaded") for number in range(105)]
         self.run_draft()
-        self.assertEqual(len(release["assets"]), 13)
+        self.assertEqual(len(release["assets"]), 9)
         self.assertFalse(any(asset["name"].startswith("old-") for asset in release["assets"]))
+
+    def legacy_release(self, tag):
+        version = self.data["version"]
+        names = package_names(version) | {f"musicalc_{version}_SHA256SUMS.txt"}
+        return self.github.add_release(tag, assets=[dict(id=100 + number, name=name,
+            size=1, state="uploaded") for number, name in enumerate(sorted(names))])
+
+    def test_branch_refresh_trims_legacy_thirteen_assets_to_nine(self):
+        release = self.legacy_release("snapshot/main")
+        original_id = release["id"]
+        self.run_draft()
+        self.assertEqual(release["id"], original_id)
+        self.assertEqual({asset["name"] for asset in release["assets"]}, release_package_names(self.data["version"]))
+        self.assertEqual(len([method for method, _, _ in self.github.mutations if method == "DELETE"]), 4)
+
+    def test_failed_upload_does_not_prune_legacy_extras_and_retry_finishes(self):
+        release = self.legacy_release("snapshot/main")
+        self.github.fail_upload = True
+        with self.assertRaisesRegex(RuntimeError, "upload interrupted"):
+            self.run_draft()
+        self.assertEqual(len(release["assets"]), 13)
+        self.assertFalse(any(method == "DELETE" for method, _, _ in self.github.mutations))
+        self.assertIn("incomplete", release["body"].lower())
+        self.run_draft()
+        self.assertEqual({asset["name"] for asset in release["assets"]}, release_package_names(self.data["version"]))
+        self.assertNotIn("incomplete", release["body"].lower())
+
+    def test_old_local_manifest_is_neither_rewritten_nor_uploaded(self):
+        checksum = self.root / f"musicalc_{self.data['version']}_SHA256SUMS.txt"
+        checksum.write_bytes(b"old manifest")
+        self.run_draft()
+        self.assertEqual(checksum.read_bytes(), b"old manifest")
+        self.assertNotIn(checksum.name, self.github.uploads)
+        self.assertEqual(len(self.github.uploads), 9)
+
+    def test_legacy_tag_draft_and_published_release_keep_all_their_assets(self):
+        self.select_tag()
+        release = self.legacy_release("0.9.0")
+        for published in (False, True):
+            release["draft"] = not published
+            before = copy.deepcopy(release)
+            self.run_draft()
+            self.assertEqual(release, before)
+            self.assertEqual(len(release["assets"]), 13)
+            self.assertFalse(self.github.mutations)
+            self.assertFalse(self.github.uploads)
 
 
 class GitHubCommandTests(unittest.TestCase):

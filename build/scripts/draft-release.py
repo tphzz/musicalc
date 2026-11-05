@@ -72,8 +72,9 @@ def require_draft(endpoint):
 
 
 def prepare_assets(directory, version):
-    checksum = directory / f"musicalc_{version}_SHA256SUMS.txt"
-    paths = sorted(path for path in directory.rglob("*") if path.is_file() and path != checksum)
+    # Leave checksum manifests from earlier publisher runs untouched and unuploaded.
+    legacy_checksum = directory / f"musicalc_{version}_SHA256SUMS.txt"
+    paths = sorted(path for path in directory.rglob("*") if path.is_file() and path != legacy_checksum)
     names = [path.name for path in paths]
     if len(names) != len(set(names)):
         raise ValueError("Duplicate release artifact names")
@@ -89,20 +90,22 @@ def prepare_assets(directory, version):
     missing, unexpected = expected - set(names), set(names) - expected
     if missing or unexpected:
         raise ValueError(f"Invalid release artifacts: missing={sorted(missing)}, unexpected={sorted(unexpected)}")
+    build_only = {
+        f"musicalc_{version}_windows_amd64.exe", f"musicalc_{version}_windows_arm64.exe",
+        f"MusiCalc_{version}_universal.app.zip",
+    }
+    upload_paths = []
     inventory = {}
     for path in paths:
         if path.is_symlink() or not path.stat().st_size:
             raise ValueError(f"Release artifact must be a nonempty regular file: {path}")
+        if path.name in build_only:
+            continue
         with path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
         inventory[path.name] = {"size": path.stat().st_size, "digest": "sha256:" + digest}
-    if checksum.is_symlink():
-        raise ValueError("Checksum artifact cannot be a symbolic link")
-    checksum.write_text("".join(f"{inventory[path.name]['digest'][7:]}  {path.name}\n" for path in paths),
-                        encoding="utf-8")
-    inventory[checksum.name] = {"size": checksum.stat().st_size,
-        "digest": "sha256:" + hashlib.sha256(checksum.read_bytes()).hexdigest()}
-    return [*paths, checksum], inventory
+        upload_paths.append(path)
+    return upload_paths, inventory
 
 
 def verify_assets(endpoint, expected, complete=False):
