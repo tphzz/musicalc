@@ -25,10 +25,27 @@ def packaging_step(test, platform, shell):
     return re.search(r"(?m)^        run: (.+)$", step).group(1)
 
 
+def draft_step():
+    workflow = (ROOT / ".github/workflows/native.yml").read_text(encoding="utf-8")
+    job = workflow.split("  draft-release:\n", 1)[1]
+    step = re.split(r"(?m)^      - ", job)[-1]
+    body = step.split("        run: |\n", 1)[1]
+    return job, step, "\n".join(line[10:] for line in body.splitlines())
+
+
 class NativeWorkflowRoutingTests(unittest.TestCase):
     def test_packaging_routes_use_platform_native_shells(self):
         packaging_step(self, "Windows", "powershell")
         packaging_step(self, "Linux", "bash")
+
+    def test_draft_runs_for_branches_and_tags_with_step_scoped_repository_token(self):
+        job, step, _ = draft_step()
+        self.assertNotIn("    if:", job)
+        self.assertIn("needs: [checks, linux-x64, linux-arm64, windows-installer, android, macos, iphone]", job)
+        self.assertIn("contents: read", job)
+        self.assertIn("GH_TOKEN: ${{ secrets.GH_TOKEN }}", step)
+        self.assertNotIn("GH_TOKEN:", job.split("    steps:", 1)[0])
+        self.assertNotIn("--draft=false", job)
 
 
 @unittest.skipUnless(os.name == "nt" and POWERSHELL, "requires Windows PowerShell")
@@ -85,6 +102,18 @@ class LinuxNativeStepTests(unittest.TestCase):
                 self.assertEqual(result.returncode, status, result.stderr)
                 self.assertEqual(result.stdout.splitlines(),
                                  ["argument:build/scripts/build-platform.py", "argument:linux", f"argument:{arch}"])
+
+    def test_draft_step_rejects_missing_token_and_propagates_helper_failure(self):
+        _, _, body = draft_step()
+        for token, status, expected in (("", 0, 1), ("test-token", 0, 0), ("test-token", 9, 9)):
+            with self.subTest(token_present=bool(token), status=status):
+                result = subprocess.run([BASH, "--noprofile", "--norc", "-c",
+                    'python() { printf "argument:%s\\n" "$@"; return "$MUSICALC_TEST_EXIT"; }\n' + body],
+                    env={**os.environ, "GH_TOKEN": token, "MUSICALC_TEST_EXIT": str(status)},
+                    capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, expected, result.stderr)
+                self.assertEqual("argument:build/scripts/draft-release.py" in result.stdout, bool(token))
+                self.assertNotIn("test-token", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

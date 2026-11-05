@@ -313,6 +313,53 @@ contain a `musicalc/` directory and executable `install.sh`. Windows builds reta
 their existing CPU requirements too; an architecture label is not a promise of
 compatibility with every processor in that architecture.
 
+## Release drafts
+
+Only **00 Full - All Platforms** creates GitHub release drafts, after its existing
+build prerequisites succeed. Standalone platform workflows produce Actions
+artifacts. The full workflow uses this policy:
+
+| Selected ref | Draft behavior |
+|---|---|
+| New numeric tag, such as `0.9.0` | Create one draft for that exact tag and built commit. |
+| Tag with an existing draft or published release | Preserve it and report its URL; reruns do not replace assets or notes. |
+| Branch, such as `main` or `0.9.0` | Create or refresh its own draft, identified by `snapshot/main` or `snapshot/0.9.0`. |
+
+Branch drafts are marked as prereleases and target the exact built commit, with
+the version, commit and Actions run in their notes. Their names are pending tag
+names: saving the draft does not create a Git tag. The workflow never creates,
+moves or deletes Git refs. Publishing a branch draft manually creates its tag
+and stops further automatic refreshes for that snapshot identity. Use a reviewed
+numeric release tag for normal distribution instead.
+
+The final job requires GitHub CLI (`gh`) on its Linux x64 runner and repository
+secret **`GH_TOKEN`**. Use a fine-grained personal access token scoped
+only to this repository, with **Contents: read and write** and **Workflows: read
+and write**. GitHub can require the latter when the target commit changes workflow
+files; the built-in Actions token cannot receive that permission. Keep the token
+value out of files/logs and renew it before expiry. Only the final release step
+receives it; checkout and artifact downloads use the built-in token.
+See [GitHub's release API permissions](https://docs.github.com/en/rest/releases/releases#create-a-release).
+
+Draft preparation requires both Windows EXEs, the dual-architecture installer,
+both Linux architectures in TAR/DEB/RPM formats, the universal macOS app ZIP/DMG
+and Android ARM64 APK. It rejects missing, duplicate, empty or unexpected files
+and adds SHA-256 checksums. The iPhone IPA is excluded.
+
+Branch refreshes are visibly marked **incomplete** until uploads, remote inventory
+verification and removal of obsolete filenames finish. New assets upload before
+obsolete files are removed. Same-commit reruns replace same-named assets too;
+this is not an atomic replacement. If a refresh fails, rerun the draft job to
+repair it. A failed initial tag upload removes only its newly created draft,
+retaining the Git tag. If cancellation, connection loss or permissions prevent
+cleanup, delete the incomplete draft manually without deleting its Git tag,
+then rerun. Existing tag drafts remain preserved even when incomplete.
+
+Published releases and conflicting existing snapshot tags are never replaced.
+Duplicate drafts for one identity require manual reconciliation. Draft lookup
+includes all pages of [GitHub's release listing](https://docs.github.com/en/rest/releases/releases#list-releases);
+the published-release-by-tag endpoint alone does not find drafts.
+
 ## Review and tag an exact release revision
 
 After validating the release branch, integrate it into main deliberately.
@@ -333,8 +380,8 @@ git push origin refs/tags/0.9.0:refs/tags/0.9.0
 
 Run **00 Full - All Platforms** manually against that tag. Tagged macOS packages
 must be signed and notarized. After all platforms succeed, the final job creates
-or updates a **draft** GitHub release containing Windows, Linux, macOS and Android
-assets plus SHA-256 checksums. It refuses to replace a published release.
+a **draft** GitHub release containing Windows, Linux, macOS and Android assets
+plus SHA-256 checksums, or preserves the existing release for that tag.
 Publishing the reviewed draft is a separate user action.
 
 The iPhone IPA is an Actions artifact and uses App Store Connect/TestFlight,

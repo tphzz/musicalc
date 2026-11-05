@@ -65,15 +65,13 @@ jobs:
     with:
       upload_testflight: ${{ inputs.upload_testflight }}
   draft-release:
-    if: needs.checks.outputs.release == 'true'
     needs: [checks, linux-x64, linux-arm64, windows-installer, android, macos, iphone]
     runs-on: [self-hosted, Linux, X64, jammy, docker]
     timeout-minutes: 15
     permissions:
       actions: read
-      contents: write
+      contents: read
     env:
-      GH_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -87,5 +85,14 @@ jobs:
           pattern: release-*
           path: build/release-assets
           merge-multiple: true
-      - name: Create or update exact-tag draft
-        run: python build/scripts/draft-release.py build/release-assets
+      - name: Create tag draft or refresh branch snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_PROMPT_DISABLED: "1"
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::Set repository secret GH_TOKEN with Contents and Workflows write access."
+            exit 1
+          fi
+          python build/scripts/draft-release.py build/release-assets
