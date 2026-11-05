@@ -2,16 +2,18 @@ package ui
 
 import (
 	"fmt"
+	"musicalc/internal/i18n"
 	"musicalc/internal/logic"
 	"musicalc/internal/ui/widgets"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewSampleLengthTab() fyne.CanvasObject {
+func NewSampleLengthTab() *View {
+	texts := newTextRefresh()
 	// Sample rate binding
 	sampleRate := binding.NewString()
 	_ = sampleRate.Set("44100")
@@ -37,19 +39,19 @@ func NewSampleLengthTab() fyne.CanvasObject {
 	// Sample rate selector (callback will be set after calcFromTempo is defined)
 	sampleRateSelect := widget.NewSelectEntry(sampleRates)
 	sampleRateSelect.SetText("44100")
-	sampleRateSelect.PlaceHolder = "Sample Rate"
+	texts.add(func() { sampleRateSelect.PlaceHolder = i18n.T("field.sample_rate_title"); sampleRateSelect.Refresh() })
 
 	// Beats input
 	beatsInput := widgets.NewNumericEntry()
-	beatsInput.PlaceHolder = "Beats"
+	texts.placeholder(beatsInput, "field.beats")
 
 	// Bidirectional input/output fields
 	samplesEntry := widgets.NewNumericEntry()
-	samplesEntry.PlaceHolder = "Length in samples"
+	texts.placeholder(samplesEntry, "field.samples")
 	msEntry := widgets.NewNumericEntry()
-	msEntry.PlaceHolder = "Length in ms"
+	texts.placeholder(msEntry, "field.milliseconds")
 	tempoEntry := widgets.NewNumericEntry()
-	tempoEntry.PlaceHolder = "Tempo"
+	texts.placeholder(tempoEntry, "field.tempo")
 
 	// Flag to prevent circular updates
 	updating := false
@@ -172,19 +174,19 @@ func NewSampleLengthTab() fyne.CanvasObject {
 	calcFromTempo()
 
 	// Reset button
-	resetBtn := widget.NewButton("🔄 Reset", func() {
+	resetBtn := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 		sampleRateSelect.SetText("44100")
 		beatsInput.SetText("4")
 	})
 
-	return container.NewVBox(
+	return texts.view(container.NewVBox(
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Sample Rate"),
+			texts.label("field.sample_rate_title"),
 			sampleRateSelect,
 		),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Beats"),
+			texts.label("field.beats"),
 			beatsInput,
 		),
 		container.NewGridWithColumns(2,
@@ -193,16 +195,16 @@ func NewSampleLengthTab() fyne.CanvasObject {
 		),
 		widget.NewSeparator(),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Length in samples"),
+			texts.label("field.samples"),
 			samplesEntry,
 		),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Length in ms"),
+			texts.label("field.milliseconds"),
 			msEntry,
 		),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Tempo"),
+			texts.label("field.tempo"),
 			tempoEntry,
 		),
-	)
+	))
 }

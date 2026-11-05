@@ -11,12 +11,20 @@ $distDir = Join-Path $projectRoot "build\dist"
 $buildTags = "no_emoji,no_animations,migrated_fynedo"
 
 # --- Locate Android SDK and NDK ---
-if ([string]::IsNullOrWhiteSpace($env:ANDROID_HOME)) {
-    $env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA "Android\Sdk"
+function Resolve-AndroidSdkPath {
+    param([string]$ProcessPath, [string]$MachinePath, [string]$ProfilePath)
+    $sdkPath = $ProcessPath
+    if ([string]::IsNullOrWhiteSpace($sdkPath)) { $sdkPath = $MachinePath }
+    if ([string]::IsNullOrWhiteSpace($sdkPath)) { $sdkPath = $ProfilePath }
+    if (-not (Test-Path -LiteralPath $sdkPath -PathType Container)) {
+        throw "Android SDK not found at '$sdkPath'. Set ANDROID_HOME to an installed SDK directory accessible to the runner account (process setting, then machine setting, then profile default)."
+    }
+    return (Resolve-Path -LiteralPath $sdkPath).Path
 }
-if (-not (Test-Path $env:ANDROID_HOME)) {
-    throw "Android SDK not found. Set ANDROID_HOME (tried $env:ANDROID_HOME)."
-}
+
+$env:ANDROID_HOME = Resolve-AndroidSdkPath $env:ANDROID_HOME `
+    ([Environment]::GetEnvironmentVariable("ANDROID_HOME", "Machine")) `
+    (Join-Path $env:LOCALAPPDATA "Android\Sdk")
 
 if ([string]::IsNullOrWhiteSpace($env:ANDROID_NDK_HOME) -or -not (Test-Path $env:ANDROID_NDK_HOME)) {
     $ndkDir = Join-Path $env:ANDROID_HOME "ndk"

@@ -9,10 +9,12 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewTempoChangeTab() fyne.CanvasObject {
+func NewTempoChangeTab() *View {
+	texts := newTextRefresh()
 	// Tempo bindings
 	originalTempo := binding.NewString()
 	_ = originalTempo.Set("120")
@@ -25,16 +27,16 @@ func NewTempoChangeTab() fyne.CanvasObject {
 	newTempoEntry.SetText("100")
 
 	timeStretchEntry := widgets.NewNumericEntry()
-	timeStretchEntry.PlaceHolder = "Time Stretching %"
+	texts.placeholder(timeStretchEntry, "field.stretch_placeholder")
 
 	// Read-only output fields (using Labels)
 	tempoDeltaLabel := widget.NewLabel("")
 
 	// Editable transpose inputs (standard notation)
 	semitonesEntry := widgets.NewNumericEntry()
-	semitonesEntry.PlaceHolder = "Transpose Semis"
+	texts.placeholder(semitonesEntry, "field.semitones_input")
 	centsEntry := widgets.NewNumericEntry()
-	centsEntry.PlaceHolder = "Transpose Cents"
+	texts.placeholder(centsEntry, "field.cents_input")
 
 	// Read-only 50-cent notation outputs
 	semitones50Label := widget.NewLabel("")
@@ -283,7 +285,7 @@ func NewTempoChangeTab() fyne.CanvasObject {
 	centsEntry.OnChanged = func(s string) { calcFromTranspose() }
 
 	// Swap button to swap original and new tempo
-	swapBtn := widget.NewButton("🔀 Swap", func() {
+	swapBtn := texts.buttonWithIcon("action.swap", theme.ContentRedoIcon(), func() {
 		origText := originalTempoEntry.Text
 		newText := newTempoEntry.Text
 		originalTempoEntry.SetText(newText)
@@ -291,52 +293,35 @@ func NewTempoChangeTab() fyne.CanvasObject {
 	})
 
 	// Reset button
-	resetBtn := widget.NewButton("🔄 Reset", func() {
+	resetBtn := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 	})
 
 	// Initialize calculated fields on startup
 	calcFromNewTempo()
 
-	return container.NewVBox(
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Original Tempo"),
-			originalTempoEntry,
-		),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("New Tempo"),
-			newTempoEntry,
-		),
+	// The full 50-cent labels are wider than half a phone screen; use the
+	// same short form as the Frequency to Note tab there
+	semis50Key, cents50Key := "field.transpose_semis50", "field.transpose_cents50"
+	if fyne.CurrentDevice().IsMobile() {
+		semis50Key, cents50Key = "field.semis50", "field.cents50"
+	}
+
+	return texts.view(container.NewVBox(
+		texts.row("field.original_tempo", originalTempoEntry),
+		texts.row("field.new_tempo", newTempoEntry),
 		container.NewGridWithColumns(2,
 			swapBtn,
 			resetBtn,
 		),
 		widget.NewSeparator(),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Time stretching %"),
-			timeStretchEntry,
-		),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Tempo Delta"),
-			tempoDeltaLabel,
-		),
+		texts.row("field.stretch", timeStretchEntry),
+		texts.row("field.tempo_delta", tempoDeltaLabel),
 		widget.NewSeparator(),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Transpose Semis"),
-			semitonesEntry,
-		),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Transpose Cents"),
-			centsEntry,
-		),
+		texts.row("field.transpose_semis", semitonesEntry),
+		texts.row("field.transpose_cents", centsEntry),
 		widget.NewSeparator(),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Transpose Semis (50¢n)"),
-			semitones50Label,
-		),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Transpose Cents (50¢n)"),
-			cents50Label,
-		),
-	)
+		texts.row(semis50Key, semitones50Label),
+		texts.row(cents50Key, cents50Label),
+	))
 }

@@ -4,10 +4,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: windows-x64-${{ github.ref }}
-  cancel-in-progress: false
-  queue: max
 jobs:
   checks:
     uses: ./.github/workflows/native-checks.yml
@@ -18,4 +14,3 @@ jobs:
       platform: windows
       arch: amd64
       runner_labels: '["self-hosted","Windows","X64"]'
-      host_group: native-x64-host

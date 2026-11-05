@@ -1,33 +1,48 @@
-import AppKit
+import CoreGraphics
+import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
-// App Store's flat icon path requires an opaque 1024px PNG. Preserve the
-// existing artwork and composite its transparent corners onto white.
-guard CommandLine.arguments.count == 3,
-      let source = NSImage(contentsOfFile: CommandLine.arguments[1]),
-      let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024,
-                                    pixelsHigh: 1024, bitsPerSample: 8,
-                                    samplesPerPixel: 3, hasAlpha: false,
-                                    isPlanar: false, colorSpaceName: .deviceRGB,
-                                    bytesPerRow: 0, bitsPerPixel: 0),
-      let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
-    fatalError("Cannot create opaque iOS icon")
+func fail(_ message: String) -> Never {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(1)
 }
-NSGraphicsContext.saveGraphicsState()
-NSGraphicsContext.current = context
-context.imageInterpolation = .high
-let bounds = NSRect(x: 0, y: 0, width: 1024, height: 1024)
-NSColor.white.setFill()
-bounds.fill()
-source.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
-context.flushGraphics()
-NSGraphicsContext.restoreGraphicsState()
-guard let data = bitmap.representation(using: .png, properties: [:]) else {
-    fatalError("Cannot encode iOS icon")
+
+guard CommandLine.arguments.count == 3 else {
+    fail("Usage: ios-icon.swift source.png destination.png")
 }
-let destination = URL(fileURLWithPath: CommandLine.arguments[2])
-try data.write(to: destination, options: .atomic)
-guard let verified = NSBitmapImageRep(contentsOf: destination),
-      verified.pixelsWide == 1024, verified.pixelsHigh == 1024,
-      !verified.hasAlpha else {
-    fatalError("iOS icon must be opaque and 1024 x 1024")
+let sourceURL = URL(fileURLWithPath: CommandLine.arguments[1])
+let destinationURL = URL(fileURLWithPath: CommandLine.arguments[2])
+guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+      let artwork = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+    fail("Cannot decode source iOS icon")
+}
+
+// Quartz draws RGB into a 32-bit buffer. The skipped byte is not alpha,
+// so ImageIO encodes an opaque RGB PNG after compositing onto white.
+guard let context = CGContext(data: nil, width: 1024, height: 1024,
+                              bitsPerComponent: 8, bytesPerRow: 1024 * 4,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+    fail("Cannot create RGBX iOS icon context")
+}
+let bounds = CGRect(x: 0, y: 0, width: 1024, height: 1024)
+context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+context.fill(bounds)
+context.interpolationQuality = .high
+context.draw(artwork, in: bounds)
+guard let image = context.makeImage(),
+      let destination = CGImageDestinationCreateWithURL(
+        destinationURL as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+    fail("Cannot create iOS icon PNG")
+}
+CGImageDestinationAddImage(destination, image, nil)
+guard CGImageDestinationFinalize(destination) else {
+    fail("Cannot write iOS icon PNG")
+}
+guard let saved = CGImageSourceCreateWithURL(destinationURL as CFURL, nil),
+      let verified = CGImageSourceCreateImageAtIndex(saved, 0, nil),
+      verified.width == 1024, verified.height == 1024,
+      [.none, .noneSkipFirst, .noneSkipLast].contains(verified.alphaInfo) else {
+    fail("iOS icon must be opaque and 1024 x 1024")
 }

@@ -2,18 +2,22 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
+	"musicalc/internal/i18n"
 	"musicalc/internal/logic"
 	sclres "musicalc/internal/logic/scl"
 	"musicalc/internal/ui/widgets"
-	"sort"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewDiapasonTab() fyne.CanvasObject {
+func NewDiapasonTab() *View {
+	texts := newTextRefresh()
 	// Reference frequency binding
 	refFreq := binding.NewString()
 	_ = refFreq.Set("440")
@@ -29,25 +33,22 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Build reference note options (C0 to B9)
 	noteNames := []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-	// Build tuning options from available scales (sorted alphabetically with default at top)
-	tuningOptions := make([]string, 0, len(sclres.AvailableScales))
-	for name := range sclres.AvailableScales {
-		tuningOptions = append(tuningOptions, name)
-	}
-	sort.Strings(tuningOptions)
-
-	// Move default tuning to the top of the list
-	defaultIdx := -1
-	for i, name := range tuningOptions {
-		if name == sclres.DefaultScaleName {
-			defaultIdx = i
-			break
+	// Tuning options: one submenu per catalog group (Equal, Just, Historic, World), short names inside
+	buildTuningGroups := func() []widgets.MenuGroup {
+		var tuningGroups []widgets.MenuGroup
+		lastGroup := ""
+		for _, t := range sclres.Tunings() {
+			if lastGroup != t.Group {
+				lastGroup = t.Group
+				tuningGroups = append(tuningGroups, widgets.MenuGroup{Name: i18n.T("tuning.group." + t.Group)})
+			}
+			g := &tuningGroups[len(tuningGroups)-1]
+			g.Options = append(g.Options, widgets.MenuOption{Label: i18n.T("tuning.scale." + t.Short), Value: t.Name})
 		}
+
+		return tuningGroups
 	}
-	if defaultIdx > 0 {
-		// Remove default from its position and prepend to the list
-		tuningOptions = append([]string{sclres.DefaultScaleName}, append(tuningOptions[:defaultIdx], tuningOptions[defaultIdx+1:]...)...)
-	}
+	tuningGroups := buildTuningGroups()
 
 	// Reset function
 	resetToDefaults := func() {
@@ -66,7 +67,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Frequency input
 	freqInput := widgets.NewNumericEntry()
 	freqInput.SetText("440")
-	freqInput.PlaceHolder = "Frequency"
+	texts.placeholder(freqInput, "field.frequency")
 	freqInput.OnChanged = func(s string) {
 		_ = refFreq.Set(s)
 	}
@@ -80,9 +81,9 @@ func NewDiapasonTab() fyne.CanvasObject {
 	// Track previous Middle C selection to avoid adjusting on unchanged selections
 	previousMiddleC := "C3"
 
-	// Tuning selector (dropdown only, no text entry)
-	tuningSelect := widget.NewSelect(tuningOptions, func(selected string) {
-		_ = tuning.Set(selected)
+	// Tuning selector (grouped dropdown with submenus; its values are the scale names)
+	tuningSelect := widgets.NewMenuSelect(tuningGroups, func(name string) {
+		_ = tuning.Set(name)
 	})
 	tuningSelect.SetSelected(sclres.DefaultScaleName)
 
@@ -149,7 +150,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	updateCache()
 
 	// Reset button
-	resetBtn := widget.NewButton("🔄 Reset", func() {
+	resetBtn := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
 		resetToDefaults()
 		refNoteEntry.SetText("A3")
 		freqInput.SetText("440")
@@ -161,18 +162,31 @@ func NewDiapasonTab() fyne.CanvasObject {
 		}
 	})
 
-	// Table displaying all MIDI notes (C-2 to B8, MIDI 0-131)
+	// Table displaying all notes from C-2 to B8 (132 rows; MIDI note numbers only go to 127)
 	table = widget.NewTableWithHeaders(
 		func() (int, int) { return 132, 4 },
 		func() fyne.CanvasObject {
-			return widget.NewLabel("")
+			// The rectangle highlights the reference note's row
+			return container.NewStack(canvas.NewRectangle(color.Transparent), widget.NewLabel(""))
 		},
 		func(id widget.TableCellID, o fyne.CanvasObject) {
-			l := o.(*widget.Label)
+			cell := o.(*fyne.Container)
+			highlight := cell.Objects[0].(*canvas.Rectangle)
+			l := cell.Objects[1].(*widget.Label)
 			l.Alignment = fyne.TextAlignLeading
 
 			// MIDI note starts at 0 (C-2)
 			midiNote := id.Row
+
+			// Highlight the reference row; a bold C marks the start of each octave
+			isReference := midiNote == cachedRefMidi
+			if isReference {
+				highlight.FillColor = theme.Color(theme.ColorNameSelection)
+			} else {
+				highlight.FillColor = color.Transparent
+			}
+			highlight.Refresh()
+			l.TextStyle = fyne.TextStyle{Bold: isReference || (id.Col == 0 && midiNote%12 == 0)}
 
 			// Use cached values for performance (updated only when bindings change)
 			// Calculate frequency using selected tuning
@@ -228,11 +242,11 @@ func NewDiapasonTab() fyne.CanvasObject {
 
 		switch id.Col {
 		case 0:
-			l.SetText("Note")
+			l.SetText(i18n.T("field.note"))
 		case 1:
-			l.SetText("Frequency")
+			l.SetText(i18n.T("field.frequency"))
 		case 2:
-			l.SetText("Cents")
+			l.SetText(i18n.T("field.cents"))
 		case 3:
 			l.SetText("MIDI")
 		}
@@ -242,8 +256,24 @@ func NewDiapasonTab() fyne.CanvasObject {
 	table.ShowHeaderColumn = false
 
 	// Wrap table in responsive container with proportional column widths
-	// Proportions: Note (23%), Frequency (28%), Cents (23%), MIDI (26%)
-	responsiveTableWidget := NewResponsiveTable(table, []float32{0.23, 0.28, 0.23, 0.26}, 400, 20)
+	// Proportions: Note (18%), Frequency (32%), Cents (22%), MIDI (28%)
+	// minWidth stays below phone widths (~340) so the proportions also apply on Android
+	responsiveTableWidget := NewResponsiveTable(table, []float32{0.18, 0.32, 0.22, 0.28}, 300, 0)
+
+	// scrollToReference shows the reference note near the top with two rows of context above it.
+	// Scrolling up to a row puts it at the top (behind the sticky header, hence 3 rows), so jump
+	// to the bottom first.
+	scrollToReference := func() {
+		row := cachedRefMidi - 3
+		if row < 0 {
+			row = 0
+		} else if row > 131 {
+			row = 131
+		}
+		table.ScrollToBottom()
+		table.ScrollTo(widget.TableCellID{Row: row, Col: 0})
+	}
+	responsiveTableWidget.OnFirstLayout = scrollToReference
 
 	// Add listener for Middle C radio buttons
 	middleCRadio.OnChanged = func(s string) {
@@ -287,6 +317,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 
 		updateCache()
 		table.Refresh()
+		scrollToReference()
 	}
 
 	// Add listeners to refresh table when inputs change
@@ -297,6 +328,7 @@ func NewDiapasonTab() fyne.CanvasObject {
 	refNote.AddListener(binding.NewDataListener(func() {
 		updateCache()
 		table.Refresh()
+		scrollToReference()
 	}))
 	tuning.AddListener(binding.NewDataListener(func() {
 		updateCache()
@@ -304,27 +336,27 @@ func NewDiapasonTab() fyne.CanvasObject {
 	}))
 
 	// Build UI layout
-	return container.NewBorder(
+	texts.add(func() { tuningSelect.SetGroups(buildTuningGroups()); table.Refresh() })
+
+	return texts.view(container.NewBorder(
 		container.NewVBox(
 			container.NewGridWithColumns(2,
-				widget.NewLabel("Reference"),
+				texts.label("field.reference"),
 				refNoteEntry,
 			),
 			container.NewGridWithColumns(2,
-				widget.NewLabel("Frequency (Hz)"),
+				texts.label("field.frequency_hz"),
 				freqInput,
 			),
 			container.NewGridWithColumns(2,
-				widget.NewLabel("Middle C"),
+				texts.label("field.middle_c"),
 				middleCRadio,
 			),
-			container.NewGridWithColumns(2,
-				tuningSelect,
-				resetBtn,
-			),
+			// The tuning dropdown takes all the width Reset leaves, so its labels show in full
+			container.NewBorder(nil, nil, nil, resetBtn, tuningSelect),
 			widget.NewSeparator(),
 		),
 		nil, nil, nil,
 		responsiveTableWidget,
-	)
+	))
 }

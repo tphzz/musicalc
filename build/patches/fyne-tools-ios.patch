@@ -11,7 +11,12 @@
  	cmd.Flag.BoolVar(&buildA, "a", false, "")
 --- a/cmd/fyne/internal/mobile/build_iosapp.go
 +++ b/cmd/fyne/internal/mobile/build_iosapp.go
-@@ -526,12 +526,12 @@
+@@ -127,0 +128,4 @@
++	}
++
++	if keychain := os.Getenv("MUSICALC_IOS_SIGNING_KEYCHAIN"); keychain != "" {
++		cmdStrings = append(cmdStrings, fmt.Sprintf("OTHER_CODE_SIGN_FLAGS=%s --keychain %q", os.Getenv("OTHER_CODE_SIGN_FLAGS"), keychain))
+@@ -526,12 +530,12 @@
          GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
          GCC_WARN_UNUSED_FUNCTION = YES;
          GCC_WARN_UNUSED_VARIABLE = YES;
@@ -48,7 +53,7 @@
  	if err != nil {
  		return errors.New("failed to determine team ID")
  	}
-@@ -219,17 +219,9 @@
+@@ -219,17 +219,13 @@
  		return err
  	}
  
@@ -65,13 +70,20 @@
 -		fileEntitlementsPlist, "Payload/"+appName+"/")
 +	// Preserve the concrete distribution entitlements produced by Xcode.
 +	cmd := exec.Command("codesign", "-f", "-vv", "-s", r.certificate,
-+		"--preserve-metadata=entitlements", "--generate-entitlement-der", "Payload/"+appName+"/")
++		"--preserve-metadata=entitlements", "--generate-entitlement-der")
++	if keychain := os.Getenv("MUSICALC_IOS_SIGNING_KEYCHAIN"); keychain != "" {
++		cmd.Args = append(cmd.Args, "--keychain", keychain)
++	}
++	cmd.Args = append(cmd.Args, "Payload/"+appName+"/")
  	if err := cmd.Run(); err != nil {
  		fyne.LogError("Codesign failed", err)
  		return errors.New("unable to codesign application bundle")
 --- a/cmd/fyne/internal/commands/package.go
 +++ b/cmd/fyne/internal/commands/package.go
-@@ -210,7 +210,7 @@
+@@ -23,2 +22,0 @@
+-	"fyne.io/fyne/v2"
+-
+@@ -210,7 +208,7 @@
  	if pkgUtil.IsMobile(p.os) { // we don't use the normal build command for mobile so inject before gomobile...
  		close, err := injectMetadataIfPossible(p.dir, p.appData, createMetadataInitFile)
  		if err != nil {

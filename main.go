@@ -2,18 +2,29 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"musicalc/internal/i18n"
+	"musicalc/internal/platform/displayscale"
 	"musicalc/internal/ui"
-	"strings"
+	"musicalc/internal/ui/widgets"
+	"os"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/mobile"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
 var version = "dev"
+
+const (
+	windowWidth  = 450
+	windowHeight = 650
+)
 
 // CategoryInfo represents a category with tab indices
 type CategoryInfo struct {
@@ -21,196 +32,277 @@ type CategoryInfo struct {
 	TabIndices []int
 }
 
-// createCompactHeader creates a compact header with: hamburger + "category / tab heading"
-func createCompactHeader(window fyne.Window, categories []CategoryInfo, switchCategory func(int), showAbout func(), headerLabel *widget.Label) *fyne.Container {
-	menuButton := widget.NewButtonWithIcon("", theme.MenuIcon(), func() {
-		showCategoryMenu(window, categories, switchCategory, showAbout)
-	})
+// tabInfo describes one calculator tab; its content is built the first time it is shown
+type tabInfo struct {
+	text    string // message key for the desktop tab; mobile shows icons only
+	heading string // message key for the full calculator heading
+	icon    fyne.Resource
+	build   func() *ui.View
+	help    string // help page, see internal/ui/help
+}
+
+// createCompactHeader creates a compact header with: hamburger + "category / tab heading", and on
+// the right the overflow button (⋮) for tabs with extra actions
+func createCompactHeader(showMenu func(), headerLabel *widget.Label, actionsButton fyne.CanvasObject) *fyne.Container {
+	menuButton := widgets.NewButtonWithIcon("", theme.MenuIcon(), showMenu)
 	menuButton.Importance = widget.LowImportance
-	return container.NewHBox(menuButton, container.NewCenter(headerLabel))
+	// Truncate long "category / tab" headings instead of overflowing narrow phone screens
+	headerLabel.Truncation = fyne.TextTruncateEllipsis
+	// Spacers center the label vertically next to the (taller) menu button while it keeps the full width
+	return container.NewBorder(nil, nil, menuButton, actionsButton,
+		container.NewVBox(layout.NewSpacer(), headerLabel, layout.NewSpacer()))
+}
+
+// showTabMenu opens the shown tab's overflow menu under the button, right-aligned with it
+func showTabMenu(window fyne.Window, button fyne.CanvasObject, menu *fyne.Menu) {
+	if menu == nil {
+		return
+	}
+	popUp := widget.NewPopUpMenu(menu, window.Canvas())
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(button)
+	x := pos.X + button.Size().Width - popUp.MinSize().Width
+	popUp.ShowAtPosition(fyne.NewPos(fyne.Max(x, 0), pos.Y+button.Size().Height))
+}
+
+func writeVersion(args []string, out io.Writer) bool {
+	if len(args) != 1 || args[0] != "--version" {
+		return false
+	}
+	fmt.Fprintln(out, ui.DisplayVersion(version, fyne.AppMetadata{}, false))
+	return true
 }
 
 func main() {
+	if writeVersion(os.Args[1:], os.Stdout) {
+		return
+	}
+	if err := displayscale.Configure(); err != nil {
+		fyne.LogError("Could not configure desktop scaling", err)
+	}
 	myApp := app.NewWithID("com.musicalc")
+	ui.InitializeLanguage(myApp.Preferences())
 	myApp.Settings().SetTheme(ui.NewCustomTheme())
 
+	var scale *displayscale.Controller
+	if !fyne.CurrentDevice().IsMobile() {
+		var err error
+		scale, err = displayscale.NewController(myApp)
+		if err != nil {
+			fyne.LogError("Could not configure desktop zoom", err)
+		}
+	}
+	window := buildMainWindow(myApp, scale)
+	stopScaleUpdates := func() {}
+	if scale != nil {
+		stopScaleUpdates = scale.Follow(window, fyne.NewSize(windowWidth, windowHeight))
+		myApp.Lifecycle().SetOnEnteredForeground(func() { fyne.Do(scale.Refresh) })
+	}
+	window.SetOnClosed(stopScaleUpdates)
+	defer stopScaleUpdates()
+	window.ShowAndRun()
+}
+
+func buildMainWindow(myApp fyne.App, scale *displayscale.Controller) fyne.Window {
 	window := myApp.NewWindow("MusiCalc")
-	window.Resize(fyne.NewSize(450, 650))
+	window.Resize(fyne.NewSize(windowWidth, windowHeight))
 	window.SetFixedSize(true)
 
 	if icon, err := fyne.LoadResourceFromPath("icons/appicon.png"); err == nil {
 		window.SetIcon(icon)
 	}
 
-	tabHeadings := map[string]string{
-		"timecode":     "Timecode Calculator",
-		"tempo":        "Tempo to Delay",
-		"tempochange":  "Tempo Change",
-		"note2freq":    "Note to Frequency",
-		"freq2note":    "Frequency to Note",
-		"samplelength": "Sample Length",
-		"alignment":    "Alignment Delay",
+	tabs := []tabInfo{
+		{"tab.timecode", "title.timecode", ui.ResourceTimecodeSvg, ui.NewTimecodeTab, "timecode"},
+		{"tab.delay", "title.delay", ui.ResourceDelaySvg, ui.NewTempoTab, "tempo-to-delay"},
+		{"tab.tempochange", "title.tempochange", ui.ResourceTempochangeSvg, ui.NewTempoChangeTab, "tempo-change"},
+		{"tab.notefreq", "title.notefreq", ui.ResourceNote2freqSvg, ui.NewDiapasonTab, "note-to-frequency"},
+		{"tab.freqnote", "title.freqnote", ui.ResourceFreq2noteSvg, ui.NewFrequencyToNoteTab, "frequency-to-note"},
+		{"tab.samples", "title.samples", ui.ResourceSamplelengthSvg, ui.NewSampleLengthTab, "sample-length"},
+		{"tab.alignment", "title.alignment", ui.ResourceAlignmentdelaySvg, ui.NewAlignmentDelayTab, "alignment-delay"},
+		{"tab.tap", "title.tap", ui.ResourceTaptempoSvg, nil, "tap-tempo"}, // built below: it needs the tab bar
+		{"tab.sum", "title.sum", ui.ResourcePhaseSvg, ui.NewTwoMicSumTab, "two-mic-sum"},
+		{"tab.three", "title.three", ui.ResourceThreetooneSvg, ui.NewThreeToOneTab, "three-to-one"},
 	}
-
-	var switchCategory func(int)
-
-	// Determine tab text based on device type
+	// Mobile shows icons only (larger, in fixed-width tabs)
 	isMobile := fyne.CurrentDevice().IsMobile()
-	var timecodeText, tempoText, tempoChangeText, note2freqText, freq2noteText, sampleLengthText, alignmentText string
-	if !isMobile {
-		timecodeText = "Timecode"
-		tempoText = "Delay"
-		tempoChangeText = "Tempo Chg"
-		note2freqText = "Note→Freq"
-		freq2noteText = "Freq→Note"
-		sampleLengthText = "Sample Len"
-		alignmentText = "Align Dly"
+	about := ui.NewAboutDialog(ui.DisplayVersion(version, myApp.Metadata(), isMobile), window)
+	var preferencesDialog *ui.PreferencesDialog
+	showAbout := func() { preferencesDialog.Hide(); about.Show() }
+	showPreferences := func() { about.Hide(); preferencesDialog.Show() }
+	nativeAboutMenu := runtime.GOOS == "darwin" && !isMobile
+	if nativeAboutMenu {
+		// Fyne requires the literal About role ID; the OS owns the native menu title.
+		window.SetMainMenu(fyne.NewMainMenu(fyne.NewMenu("MusiCalc", fyne.NewMenuItem("About", showAbout))))
 	}
 
-	// Create all tab items
-	timecodeTab := container.NewTabItem(timecodeText, ui.NewTimecodeTab())
-	timecodeTab.Icon = ui.ResourceTimecodeSvg
-
-	tempoTab := container.NewTabItem(tempoText, ui.NewTempoTab())
-	tempoTab.Icon = ui.ResourceDelaySvg
-
-	tempoChangeTab := container.NewTabItem(tempoChangeText, ui.NewTempoChangeTab())
-	tempoChangeTab.Icon = ui.ResourceTempochangeSvg
-
-	note2freqTab := container.NewTabItem(note2freqText, ui.NewDiapasonTab())
-	note2freqTab.Icon = ui.ResourceNote2freqSvg
-
-	freq2noteTab := container.NewTabItem(freq2noteText, ui.NewFrequencyToNoteTab())
-	freq2noteTab.Icon = ui.ResourceFreq2noteSvg
-
-	sampleLengthTab := container.NewTabItem(sampleLengthText, ui.NewSampleLengthTab())
-	sampleLengthTab.Icon = ui.ResourceSamplelengthSvg
-
-	alignmentTab := container.NewTabItem(alignmentText, ui.NewAlignmentDelayTab())
-	alignmentTab.Icon = ui.ResourceAlignmentdelaySvg
-
-	// Create single AppTabs with ALL tabs (maintains left alignment)
-	allTabs := []*container.TabItem{
-		timecodeTab, tempoTab, tempoChangeTab,
-		note2freqTab, freq2noteTab,
-		sampleLengthTab,
-		alignmentTab,
-	}
-	tabs := container.NewAppTabs(allTabs...)
-	tabs.SetTabLocation(container.TabLocationBottom)
-
-	// Define categories with their tab indices
 	categories := []CategoryInfo{
-		{Name: "Time & Tempo", TabIndices: []int{0, 1, 2}},
-		{Name: "Frequency & Pitch", TabIndices: []int{3, 4}},
-		{Name: "Analysis", TabIndices: []int{5}},
-		{Name: "Multi-Mic", TabIndices: []int{6}},
-	}
-
-	// Tab heading keys for each global tab index
-	tabHeadingKeys := []string{
-		"timecode", "tempo", "tempochange",
-		"note2freq", "freq2note",
-		"samplelength",
-		"alignment",
+		{Name: i18n.T("category.time"), TabIndices: []int{0, 1, 2, 7}},
+		{Name: i18n.T("category.pitch"), TabIndices: []int{3, 4}},
+		{Name: i18n.T("category.analysis"), TabIndices: []int{5}},
+		{Name: i18n.T("category.mics"), TabIndices: []int{6, 8, 9}},
 	}
 
 	// Always start with Time & Tempo category (Timecode Calculator)
 	currentCategoryIndex := 0
 
 	headerLabel := widget.NewLabel("")
+	content := container.NewStack()
+	tabBar := widgets.NewTabBar()
+	built := make([]*ui.View, len(tabs))
+	shown := 0 // global index of the tab on screen
 
-	// Helper to show only tabs for a specific category
+	// Help replaces the whole window content until it is closed; the shell, with every built
+	// tab and its values, comes back unchanged
+	var shell fyne.CanvasObject
+	helpOpen := false
+	var helpView *ui.View
+	closeHelp := func() {
+		if helpOpen {
+			helpOpen = false
+			window.SetContent(shell)
+		}
+	}
+	showHelp := func() {
+		t := tabs[shown]
+		helpOpen = true
+		helpView = ui.NewHelpView(t.help, t.heading, closeHelp)
+		window.SetContent(helpView.Content)
+	}
+
+	// Overflow button (⋮): the shown tab's own actions, then Help
+	var actionsButton *widgets.Button
+	actionsButton = widgets.NewButtonWithIcon("", theme.MoreVerticalIcon(), func() {
+		items := ui.TabMenuItems(built[shown].Content)
+		if len(items) > 0 {
+			items = append(items, fyne.NewMenuItemSeparator())
+		}
+		items = append(items, fyne.NewMenuItem(i18n.T("menu.help"), showHelp))
+		showTabMenu(window, actionsButton, fyne.NewMenu("", items...))
+	})
+	actionsButton.Importance = widget.LowImportance
+
+	// Tap Tempo's Delay button sends the tempo to Tempo to Delay (index 1 in Time & Tempo) and opens it
+	tabs[7].build = func() *ui.View {
+		return ui.NewTapTempoTab(func() { tabBar.Select(1) })
+	}
+
+	// showTab shows a tab by its global index, building its content on first use.
+	// Built tabs are kept, so their inputs survive switching away and back.
+	showTab := func(index int) {
+		if built[index] == nil {
+			built[index] = tabs[index].build()
+		}
+		shown = index
+		content.Objects = []fyne.CanvasObject{built[index].Content}
+		content.Refresh()
+		headerLabel.SetText(categories[currentCategoryIndex].Name + " / " + i18n.T(tabs[index].heading))
+	}
+
+	tabBar.OnSelected = func(i int) {
+		showTab(categories[currentCategoryIndex].TabIndices[i])
+	}
+
+	// showCategoryTabs shows the tabs of a category and selects its first tab
 	showCategoryTabs := func(categoryIdx int) {
-		if categoryIdx < 0 || categoryIdx >= len(categories) {
-			return
-		}
-
 		cat := categories[categoryIdx]
-
-		// Build list of visible tabs for this category
-		var visibleTabs []*container.TabItem
-		for _, tabIdx := range cat.TabIndices {
-			if tabIdx >= 0 && tabIdx < len(allTabs) {
-				visibleTabs = append(visibleTabs, allTabs[tabIdx])
+		items := make([]widgets.TabBarItem, len(cat.TabIndices))
+		for i, tabIdx := range cat.TabIndices {
+			items[i] = widgets.TabBarItem{Icon: tabs[tabIdx].icon}
+			if !isMobile {
+				items[i].Text = i18n.T(tabs[tabIdx].text)
 			}
 		}
-
-		// Replace tabs.Items with visible tabs
-		tabs.Items = visibleTabs
-
-		// Select first tab in category
-		if len(visibleTabs) > 0 {
-			tabs.Select(visibleTabs[0])
-		}
-
-		tabs.Refresh()
+		tabBar.SetItems(items, 0)
+		showTab(cat.TabIndices[0])
 	}
 
-	// Helper to update header text based on selected tab
-	updateHeader := func() {
-		selectedTab := tabs.Selected()
-		if selectedTab == nil {
+	showCategoryTabs(currentCategoryIndex)
+
+	switchCategory := func(index int) {
+		if index < 0 || index >= len(categories) || index == currentCategoryIndex {
 			return
 		}
+		currentCategoryIndex = index
+		showCategoryTabs(index)
+		myApp.Preferences().SetInt("lastCategory", index)
+	}
 
-		// Find which tab is selected
-		for i, tab := range allTabs {
-			if tab == selectedTab {
-				// Find category for this tab
-				for _, cat := range categories {
-					for _, tabIdx := range cat.TabIndices {
-						if tabIdx == i {
-							headerText := cat.Name + " / " + tabHeadings[tabHeadingKeys[i]]
-							headerLabel.SetText(headerText)
-							return
-						}
-					}
-				}
+	refreshLanguage := func() {
+		for i, key := range []string{"category.time", "category.pitch", "category.analysis", "category.mics"} {
+			categories[i].Name = i18n.T(key)
+		}
+		for _, view := range built {
+			if view != nil {
+				view.RefreshText()
 			}
 		}
-	}
-
-	// Set initial category tabs visibility
-	showCategoryTabs(currentCategoryIndex)
-	updateHeader()
-
-	// Update header when tab changes
-	tabs.OnSelected = func(item *container.TabItem) {
-		updateHeader()
-	}
-
-	// Function to switch categories
-	switchCategory = func(index int) {
-		if index >= 0 && index < len(categories) {
-			if index == currentCategoryIndex {
-				return
+		indices := categories[currentCategoryIndex].TabIndices
+		labels := make([]string, len(indices))
+		if !isMobile {
+			for i, index := range indices {
+				labels[i] = i18n.T(tabs[index].text)
 			}
-
-			currentCategoryIndex = index
-			showCategoryTabs(index)
-			updateHeader()
-
-			myApp.Preferences().SetInt("lastCategory", index)
 		}
+		tabBar.SetLabels(labels)
+		headerLabel.SetText(categories[currentCategoryIndex].Name + " / " + i18n.T(tabs[shown].heading))
+		about.RefreshText()
+		if helpOpen && helpView != nil {
+			helpView.RefreshText()
+		}
+		shell.Refresh()
 	}
+	preferencesDialog = ui.NewPreferencesDialog(myApp.Preferences(), window, scale, refreshLanguage)
 
-	// Create initial header and content
-	header := createCompactHeader(window, categories, switchCategory, func() {
-		showAboutDialog(window)
-	}, headerLabel)
-
-	content := container.NewBorder(
+	var categoryAbout func()
+	if !nativeAboutMenu {
+		categoryAbout = showAbout
+	}
+	header := createCompactHeader(func() {
+		showCategoryMenu(window, categories, switchCategory, showPreferences, categoryAbout)
+	}, headerLabel, actionsButton)
+	// Keys typed while no field has focus: F1 opens help, Esc and the Android back button close
+	// it; other keys go to the shown tab (e.g. Space taps in Tap Tempo)
+	window.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		switch {
+		case about.HandleKey(ev):
+		case preferencesDialog.HandleKey(ev):
+		case helpOpen && (ev.Name == fyne.KeyEscape || ev.Name == mobile.KeyBack):
+			closeHelp()
+		case helpOpen:
+		case ev.Name == fyne.KeyF1:
+			showHelp()
+		case ui.HandleTabKey(built[shown].Content, ev):
+		case ev.Name == mobile.KeyBack:
+			// What Android's back button does without our key handler: leave the app
+			if d, ok := fyne.CurrentApp().Driver().(interface{ GoBack() }); ok {
+				d.GoBack()
+			}
+		}
+	})
+	var calculatorBody fyne.CanvasObject = content
+	var tabFooter fyne.CanvasObject = tabBar
+	if !isMobile {
+		calculatorBody = container.NewScroll(content)
+		tabFooter = container.NewHScroll(tabBar)
+	}
+	shell = ui.NewShell(
 		container.NewVBox(header, widget.NewSeparator()),
-		nil, nil, nil,
-		tabs,
+		calculatorBody,
+		container.NewVBox(widget.NewSeparator(), tabFooter),
 	)
-	window.SetContent(content)
-	window.ShowAndRun()
+	window.SetContent(shell)
+	return window
 }
 
 // showCategoryMenu displays a popup menu for category selection
-func showCategoryMenu(window fyne.Window, categories []CategoryInfo, onSelect func(int), showAbout func()) {
+func showCategoryMenu(window fyne.Window, categories []CategoryInfo, onSelect func(int), showPreferences, showAbout func()) *widget.PopUpMenu {
+	popupMenu := widget.NewPopUpMenu(categoryMenu(categories, onSelect, showPreferences, showAbout), window.Canvas())
+	popupMenu.Resize(fyne.NewSize(fyne.Min(240, fyne.Max(0, window.Canvas().Size().Width-20)), popupMenu.MinSize().Height))
+	popupMenu.ShowAtPosition(fyne.NewPos(10, 50))
+	return popupMenu
+}
+
+func categoryMenu(categories []CategoryInfo, onSelect func(int), showPreferences, showAbout func()) *fyne.Menu {
 	var menuItems []*fyne.MenuItem
 
 	for i, category := range categories {
@@ -219,19 +311,16 @@ func showCategoryMenu(window fyne.Window, categories []CategoryInfo, onSelect fu
 			onSelect(index)
 		}))
 	}
-	menuItems = append(menuItems, fyne.NewMenuItemSeparator(), fyne.NewMenuItem("About", showAbout))
 
-	menu := fyne.NewMenu("Categories", menuItems...)
-	popupMenu := widget.NewPopUpMenu(menu, window.Canvas())
-	popupMenu.ShowAtPosition(fyne.NewPos(10, 50))
-}
-
-func showAboutDialog(window fyne.Window) {
-	ver := strings.TrimSpace(version)
-	if ver == "" {
-		ver = "dev"
+	if len(categories) > 0 && (showPreferences != nil || showAbout != nil) {
+		menuItems = append(menuItems, fyne.NewMenuItemSeparator())
 	}
 
-	message := fmt.Sprintf("MusiCalc\n\nVersion: %s\n\nMusic calculator utility.", ver)
-	dialog.ShowInformation("About MusiCalc", message, window)
+	if showPreferences != nil {
+		menuItems = append(menuItems, fyne.NewMenuItem(i18n.T("menu.preferences"), showPreferences))
+	}
+	if showAbout != nil {
+		menuItems = append(menuItems, fyne.NewMenuItem(i18n.T("menu.about"), showAbout))
+	}
+	return fyne.NewMenu(i18n.T("menu.categories"), menuItems...)
 }

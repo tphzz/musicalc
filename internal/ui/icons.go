@@ -10,8 +10,11 @@ var (
 	ResourceDelaySvg = resourceDelaySvg
 	ResourceFreq2noteSvg = resourceFreq2noteSvg
 	ResourceNote2freqSvg = resourceNote2freqSvg
+	ResourcePhaseSvg = resourcePhaseSvg
 	ResourceSamplelengthSvg = resourceSamplelengthSvg
+	ResourceTaptempoSvg = resourceTaptempoSvg
 	ResourceTempochangeSvg = resourceTempochangeSvg
+	ResourceThreetooneSvg = resourceThreetooneSvg
 	ResourceTimecodeSvg = resourceTimecodeSvg
 )
 

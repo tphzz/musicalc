@@ -1,0 +1,11 @@
+Website = "https://github.com/bzeiss/musicalc"
+
+[Details]
+Icon = "icons/appicon.png"
+Name = "MusiCalc"
+ID = "com.github.bzeiss"
+Version = "0.9.0"
+Build = 39
+
+[Migrations]
+fyneDo = true

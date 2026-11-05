@@ -22,6 +22,7 @@ profile.cov
 build/dist/
 build/.cache/
 build/installer/out/
+builds/images
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -39,9 +40,14 @@ go.work.sum
 
 musicalc_linux_*
 musicalc_win_*
+*.apk
 fyne-cross
 fyne-cross/*
 
 # Legacy local Go build/cache directories
 .gobuildtmp/
 .gocache/
+
+# Python caches
+__pycache__/
+*.py[cod]

@@ -13,7 +13,8 @@ import stat
 import subprocess
 import sys
 import tempfile
-from ios_build_number import reserve
+from ios_build_number import current_build
+from ios_app_store import latest_build
 from version import ROOT, current
 
 
@@ -21,6 +22,25 @@ def run(*args, capture=False, env=None):
     result = subprocess.run(list(map(str, args)), cwd=ROOT, check=True,
                             stdout=subprocess.PIPE if capture else None, env=env)
     return result.stdout if capture else b""
+
+
+def verify_signing_identity(identity, keychain):
+    """Exercise the private key in the actual runner session before compiling."""
+    cache = ROOT / "build/.cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    print(f"Checking iPhone signing in runner session using {keychain}", flush=True)
+    try:
+        run("id")
+        run("security", "list-keychains", "-d", "user")
+        run("security", "show-keychain-info", keychain)
+        with tempfile.TemporaryDirectory(prefix="ios-signing-", dir=cache) as temporary:
+            probe = Path(temporary) / "signing-probe"
+            shutil.copyfile("/usr/bin/true", probe)
+            run("codesign", "--force", "--sign", identity, "--keychain", keychain,
+                "--timestamp=none", probe)
+            run("codesign", "--verify", "--strict", probe)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError(f"iPhone signing preflight failed in this runner session: {error}") from error
 
 
 def verify_bundle(info, profile, entitlements, bundle, team, version, build):
@@ -46,6 +66,28 @@ def verify_bundle(info, profile, entitlements, bundle, team, version, build):
         raise ValueError("Signed application team identifier is incorrect")
 
 
+def verify_private_key(private_key, runner_uid):
+    private_key = private_key.absolute()
+    try:
+        metadata = private_key.stat()
+    except FileNotFoundError:
+        raise ValueError(
+            f"ASC private key not found: {private_key}. Check key_directory and api_key_id in the runner config"
+        ) from None
+    except OSError as error:
+        raise ValueError(f"Cannot inspect ASC private key {private_key}: {error.strerror}") from None
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError(f"ASC private key must be a regular file: {private_key}")
+    problems = []
+    if metadata.st_uid != runner_uid:
+        problems.append(f"owner uid {metadata.st_uid}, expected runner uid {runner_uid}")
+    mode = stat.S_IMODE(metadata.st_mode)
+    if mode != 0o600:
+        problems.append(f"mode {mode:04o}, expected 0600")
+    if problems:
+        raise ValueError(f"ASC private key {private_key}: " + "; ".join(problems))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upload", action="store_true")
@@ -55,7 +97,10 @@ def main():
     directory = Path.home() / ".config/musicalc-ios"
     config_path = directory / "config.json"
     if not config_path.is_file():
-        parser.error("Complete build/docs/README-APPLE.md onboarding; missing runner-local iOS config")
+        parser.error(
+            f"Missing runner-local iOS config: {config_path}. "
+            "Create it as the runner account; see build/docs/README-APPLE.md"
+        )
     if config_path.stat().st_uid != os.getuid() or stat.S_IMODE(config_path.stat().st_mode) != 0o600:
         parser.error("iOS config must be owned by the runner and mode 600")
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -65,7 +110,8 @@ def main():
     certificate = config["certificate"]
     if not certificate.startswith("Apple Distribution: ") or not certificate.endswith(f"({team})"):
         parser.error("Configure the exact Apple Distribution certificate common name")
-    identities = run("security", "find-identity", "-v", "-p", "codesigning", capture=True).decode()
+    keychain = Path.home() / "Library/Keychains/login.keychain-db"
+    identities = run("security", "find-identity", "-v", "-p", "codesigning", keychain, capture=True).decode()
     matches = re.findall(r'([A-Fa-f0-9]{40})\s+"' + re.escape(certificate) + r'"', identities)
     if len(set(matches)) != 1:
         parser.error("Expected one valid configured Apple Distribution identity with a private key")
@@ -75,29 +121,44 @@ def main():
     if int(re.search(r"Xcode (\d+)", xcode)[1]) < 26 or int(sdk.split(".")[0]) < 26:
         parser.error("Install/select Xcode 26+ and the iOS 26+ SDK before packaging")
     env = os.environ.copy()
+    env["MUSICALC_IOS_SIGNING_KEYCHAIN"] = str(keychain)
     if args.upload:
         for key in ("app_id", "api_key_id", "api_issuer_id", "key_directory"):
             if not config.get(key):
                 parser.error("Missing App Store Connect setting: " + key)
         if not re.fullmatch(r"[0-9]+", str(config["app_id"])):
             parser.error("app_id must be the numeric App Store Connect app ID")
+        if not re.fullmatch(r"[A-Z0-9]{10}", str(config["api_key_id"])):
+            parser.error("api_key_id must be the 10-character team API key ID")
         key_directory = Path(config["key_directory"]).expanduser()
         private_key = key_directory / f"AuthKey_{config['api_key_id']}.p8"
-        if not private_key.is_file() or private_key.stat().st_uid != os.getuid() or stat.S_IMODE(private_key.stat().st_mode) != 0o600:
-            parser.error("ASC private key must exist, be owned by the runner, and be mode 600")
+        try:
+            verify_private_key(private_key, os.getuid())
+        except ValueError as error:
+            parser.error(str(error))
         env["API_PRIVATE_KEYS_DIR"] = str(key_directory)
+    verify_signing_identity(identity, keychain)
     data = current()
     version = data["marketing_version"]
-    build = reserve(directory / "build-numbers.json", bundle, version)
-    print(f"Reserved iPhone {version} build {build}", flush=True)
     tool = ROOT / "build/.cache/fyne-ios"
     tool.parent.mkdir(parents=True, exist_ok=True)
     icon = tool.parent / "ios-appicon.png"
     run("xcrun", "swift", ROOT / "build/scripts/ios-icon.swift", ROOT / "icons/appicon.png", icon)
+    build = current_build()
+    if args.upload:
+        highest = latest_build(config, bundle, version)
+        if (build, 0, 0) <= highest:
+            previous = ".".join(map(str, highest))
+            parser.error(f"Generated build {build} is not newer than App Store build {previous}; check the runner UTC clock")
+    print(f"Building iPhone {version} build {build}", flush=True)
     run(sys.executable, ROOT / "build/scripts/prepare-ios-tool.py")
-    run(tool, "release", "--os", "ios", "--name", "MusiCalc", "--app-id", bundle,
-        "--app-version", version, "--app-build", build, "--icon", icon,
-        "--certificate", certificate, "--profile", config["profile"])
+    # Fyne renames its temporary app into the checkout, which requires one filesystem.
+    with tempfile.TemporaryDirectory(prefix="ios-package-", dir=tool.parent) as temporary:
+        package_env = env.copy()
+        package_env["TMPDIR"] = temporary
+        run(tool, "release", "--os", "ios", "--name", "MusiCalc", "--app-id", bundle,
+            "--app-version", version, "--app-build", build, "--icon", icon,
+            "--certificate", certificate, "--profile", config["profile"], env=package_env)
     original = ROOT / "MusiCalc.ipa"
     cache = ROOT / "build/.cache"
     with tempfile.TemporaryDirectory(prefix="ipa-", dir=cache) as temporary:
@@ -115,7 +176,7 @@ def main():
         shutil.copy2(ROOT / "build/packaging/PrivacyInfo.xcprivacy", app / "PrivacyInfo.xcprivacy")
         entitlement_file = stage / "entitlements.plist"
         entitlement_file.write_bytes(entitlements)
-        run("codesign", "--force", "--sign", identity, "--entitlements", entitlement_file,
+        run("codesign", "--force", "--sign", identity, "--keychain", keychain, "--entitlements", entitlement_file,
             "--generate-entitlement-der", app)
         run("codesign", "--verify", "--deep", "--strict", app)
         run("plutil", "-lint", app / "PrivacyInfo.xcprivacy")
@@ -149,5 +210,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (KeyError, ValueError, OSError, subprocess.CalledProcessError) as exc:
+    except (KeyError, ValueError, OSError, subprocess.SubprocessError) as exc:
         sys.exit(str(exc))

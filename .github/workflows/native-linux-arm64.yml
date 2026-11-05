@@ -4,10 +4,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: linux-arm64-${{ github.ref }}
-  cancel-in-progress: false
-  queue: max
 jobs:
   checks:
     uses: ./.github/workflows/native-checks.yml
@@ -18,4 +14,3 @@ jobs:
       platform: linux
       arch: arm64
       runner_labels: '["self-hosted","Linux","ARM64","jammy","docker"]'
-      host_group: native-apple-silicon-host

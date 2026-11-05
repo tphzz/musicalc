@@ -7,15 +7,16 @@ import (
 	"musicalc/internal/ui/widgets"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewFrequencyToNoteTab() fyne.CanvasObject {
+func NewFrequencyToNoteTab() *View {
+	texts := newTextRefresh()
 	// Input field
 	frequencyEntry := widgets.NewNumericEntry()
-	frequencyEntry.SetPlaceHolder("Frequency")
+	texts.placeholder(frequencyEntry, "field.frequency")
 	frequencyEntry.SetText("440")
 
 	// Middle C convention selector (radio buttons)
@@ -80,7 +81,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	}
 
 	// Quick-select buttons
-	c3Button := widget.NewButton("C3", func() {
+	c3Button := widgets.NewButton("C3", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -93,7 +94,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		}
 	})
 
-	a3Button := widget.NewButton("A3", func() {
+	a3Button := widgets.NewButton("A3", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -106,7 +107,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		}
 	})
 
-	c4Button := widget.NewButton("C4", func() {
+	c4Button := widgets.NewButton("C4", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -119,7 +120,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		}
 	})
 
-	a4Button := widget.NewButton("A4", func() {
+	a4Button := widgets.NewButton("A4", func() {
 		octaveOffset := 1 // C4 convention (default)
 		if middleCRadio.Selected == "C3" {
 			octaveOffset = 2 // C3 convention
@@ -133,7 +134,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Play button - generates sine wave tone
-	playButton := widget.NewButton("▶ Play", func() {
+	playButton := texts.buttonWithIcon("action.play", theme.MediaPlayIcon(), func() {
 		freq := logic.ParseFloat(frequencyEntry.Text)
 		if freq > 0 && freq < 20000 {
 			go audio.PlayFrequency(freq, 3*time.Second)
@@ -141,7 +142,7 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	})
 
 	// Reset button
-	resetButton := widget.NewButton("🔄 Reset", func() {
+	resetButton := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
 		frequencyEntry.SetText("440")
 		middleCRadio.SetSelected("C3")
 	})
@@ -149,17 +150,14 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 	// Initialize with default frequency (A4 = 440.00 Hz)
 	calculateFromFrequency()
 
-	return container.NewVBox(
+	return texts.view(container.NewVBox(
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Frequency (Hz)"),
+			texts.label("field.frequency_hz"),
 			frequencyEntry,
 		),
+		texts.row("field.quickselect", container.NewHBox(c3Button, a3Button, c4Button, a4Button)),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Quickselect"),
-			container.NewHBox(c3Button, a3Button, c4Button, a4Button),
-		),
-		container.NewGridWithColumns(2,
-			widget.NewLabel("Middle C"),
+			texts.label("field.middle_c"),
 			middleCRadio,
 		),
 		container.NewGridWithColumns(2,
@@ -168,21 +166,21 @@ func NewFrequencyToNoteTab() fyne.CanvasObject {
 		),
 		widget.NewSeparator(),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Note"),
+			texts.label("field.note"),
 			note100Label,
 		),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Cents"),
+			texts.label("field.cents"),
 			cents100Label,
 		),
 		widget.NewSeparator(),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Note (50¢n)"),
+			texts.label("field.note50"),
 			note50Label,
 		),
 		container.NewGridWithColumns(2,
-			widget.NewLabel("Cents (50¢n)"),
+			texts.label("field.cents50"),
 			cents50Label,
 		),
-	)
+	))
 }

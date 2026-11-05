@@ -36,6 +36,13 @@ var resourceNote2freqSvg = &fyne.StaticResource{
 	StaticContent: resourceNote2freqSvgData,
 }
 
+//go:embed phase.svg
+var resourcePhaseSvgData []byte
+var resourcePhaseSvg = &fyne.StaticResource{
+	StaticName:    "phase.svg",
+	StaticContent: resourcePhaseSvgData,
+}
+
 //go:embed samplelength.svg
 var resourceSamplelengthSvgData []byte
 var resourceSamplelengthSvg = &fyne.StaticResource{
@@ -43,11 +50,25 @@ var resourceSamplelengthSvg = &fyne.StaticResource{
 	StaticContent: resourceSamplelengthSvgData,
 }
 
+//go:embed taptempo.svg
+var resourceTaptempoSvgData []byte
+var resourceTaptempoSvg = &fyne.StaticResource{
+	StaticName:    "taptempo.svg",
+	StaticContent: resourceTaptempoSvgData,
+}
+
 //go:embed tempochange.svg
 var resourceTempochangeSvgData []byte
 var resourceTempochangeSvg = &fyne.StaticResource{
 	StaticName:    "tempochange.svg",
 	StaticContent: resourceTempochangeSvgData,
+}
+
+//go:embed threetoone.svg
+var resourceThreetooneSvgData []byte
+var resourceThreetooneSvg = &fyne.StaticResource{
+	StaticName:    "threetoone.svg",
+	StaticContent: resourceThreetooneSvgData,
 }
 
 //go:embed timecode.svg

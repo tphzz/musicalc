@@ -6,7 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-from version import ROOT, current
+from version import ROOT, current, git
+from windows_binary import verify_windows_binary
 
 
 def run(*args, env=None):
@@ -30,22 +31,24 @@ def main():
         env["GORELEASER_CURRENT_TAG"] = data["version"]
     if not data["release"]:
         env["MUSICALC_SNAPSHOT_VERSION"] = data["version"]
-    if args.platform == "windows" and args.arch == "amd64":
-        env.update(CC="clang --target=x86_64-w64-windows-gnu",
-                   CXX="clang++ --target=x86_64-w64-windows-gnu",
-                   GOFLAGS="-ldflags=-extld=x86_64-w64-mingw32-gcc")
-        for tool in ("clang", "x86_64-w64-mingw32-gcc"):
-            if not shutil.which(tool):
-                parser.error(f"Missing {tool}; install LLVM and MinGW as described in README-BUILD.md")
-    elif args.platform == "windows":
+    if args.platform == "windows":
         if not shutil.which("zig"):
-            parser.error("Missing Zig 0.16.0; add it to the runner PATH")
+            parser.error("Missing Zig; install 0.17.0 or 0.16.0 and add it to the runner PATH (README-BUILD.md)")
         version = subprocess.check_output(["zig", "version"], text=True).strip()
-        if version != "0.16.0":
-            parser.error(f"Expected Zig 0.16.0; found {version}")
-        env.update(CC="zig cc -target aarch64-windows-gnu", CXX="zig c++ -target aarch64-windows-gnu")
+        if version not in ("0.16.0", "0.17.0"):
+            parser.error(f"Expected Zig 0.16.0 or 0.17.0; found {version}")
+        # Go 1.26 needs an explicit Git checkout when .git is a file.
+        env.update(GIT_DIR=git("rev-parse", "--absolute-git-dir"),
+                   GIT_WORK_TREE=git("rev-parse", "--show-toplevel"))
+        target = "x86_64" if args.arch == "amd64" else "aarch64"
+        env.update(CC=f"zig cc -target {target}-windows-gnu",
+                   CXX=f"zig c++ -target {target}-windows-gnu",
+                   ZIG_GLOBAL_CACHE_DIR=str(ROOT / "build/.cache/zig-global"),
+                   ZIG_LOCAL_CACHE_DIR=str(ROOT / "build/.cache/zig-local"))
     else:
-        run("pkg-config", "--exists", "gl", "x11", "xcursor", "xrandr", "xinerama", "xi", "xxf86vm", "alsa")
+        run("pkg-config", "--print-errors", "--exists",
+            "gl", "x11", "xcursor", "xrandr", "xinerama", "xi", "xxf86vm", "alsa",
+            "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon")
     test = ["go", "test", "./..."]
     if args.platform == "linux":
         test = ["xvfb-run", "-a", *test]
@@ -65,6 +68,7 @@ def main():
     run(*command, env=env)
     if args.platform == "windows":
         source = ROOT / "build/dist" / ("musicalc_x64.exe" if args.arch == "amd64" else "musicalc_arm64.exe")
+        verify_windows_binary(source, args.arch)
         target = ROOT / "build/dist" / f"musicalc_{data['version']}_windows_{args.arch}.exe"
         shutil.copy2(source, target)
 
