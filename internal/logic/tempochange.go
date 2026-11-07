@@ -2,88 +2,91 @@ package logic
 
 import "math"
 
+// The supported tempo range of Tempo Change, for the original and the new tempo
+const (
+	MinTempoBPM = 5.0
+	MaxTempoBPM = 999.99
+)
+
 // TempoChangeResult holds all calculated values for tempo change
 type TempoChangeResult struct {
 	NewTempo           float64
 	TimeStretchPercent float64
 	TempoVariation     float64
-	Semitones          int
+	Semitones          int // whole semitones down, then Cents from 0 to 99
 	Cents              int
-	Semitones50Cent    int // For 50-cent notation
-	Cents50Cent        int // For 50-cent notation
+	Semitones50Cent    int // nearest semitone, then Cents50Cent from -50 to +50
+	Cents50Cent        int
+	Valid              bool // both tempos are within the supported range
 }
 
-// CalculateFromNewTempo calculates all values when new tempo is known
+// TempoInRange reports whether bpm is within the supported tempo range
+func TempoInRange(bpm float64) bool {
+	return bpm >= MinTempoBPM && bpm <= MaxTempoBPM
+}
+
+// CalculateFromNewTempo calculates all values when the new tempo is known. The semitones are the
+// pitch change of playing the original faster or slower (varispeed); a pitch-preserving time
+// stretch changes the length only.
 func CalculateFromNewTempo(originalTempo, newTempo float64) TempoChangeResult {
-	if originalTempo <= 0 || newTempo <= 0 {
+	if !TempoInRange(originalTempo) || !TempoInRange(newTempo) {
 		return TempoChangeResult{}
 	}
 
-	ratio := originalTempo / newTempo
-	timeStretchPercent := ratio * 100.0
-	tempoVariation := ((newTempo - originalTempo) / originalTempo) * 100.0
-
-	// Calculate semitones: semitones = 12 * log2(newTempo/originalTempo)
-	semitonesFull := 12.0 * math.Log2(newTempo/originalTempo)
-
-	// For display: semitones is the floor/ceil, cents is the remainder
-	// When negative: -32.04 semitones = -33 semitones + 96 cents
-	var semitones, cents int
-	if semitonesFull >= 0 {
-		semitones = int(math.Floor(semitonesFull))
-		cents = int(math.Round((semitonesFull - float64(semitones)) * 100.0))
-	} else {
-		semitones = int(math.Floor(semitonesFull))
-		cents = int(math.Round((semitonesFull - float64(semitones)) * 100.0))
-	}
-
-	// 50-cent notation rounds to the nearest semitone and shows the rest as ±50 cents, like
-	// Frequency to Note: e.g. +3.70 = +4 semitones −30 cents, −55.69 = −56 semitones +31 cents
-	semitones50 := int(math.Round(semitonesFull))
-	cents50 := int(math.Round((semitonesFull - float64(semitones50)) * 100.0))
-
+	split := splitSemitones(12.0 * math.Log2(newTempo/originalTempo))
 	return TempoChangeResult{
 		NewTempo:           newTempo,
-		TimeStretchPercent: timeStretchPercent,
-		TempoVariation:     tempoVariation,
-		Semitones:          semitones,
-		Cents:              cents,
-		Semitones50Cent:    semitones50,
-		Cents50Cent:        cents50,
+		TimeStretchPercent: originalTempo / newTempo * 100.0,
+		TempoVariation:     (newTempo - originalTempo) / originalTempo * 100.0,
+		Semitones:          split.semitones,
+		Cents:              split.cents,
+		Semitones50Cent:    split.nearest,
+		Cents50Cent:        split.cents50,
+		Valid:              true,
 	}
 }
 
 // CalculateFromTimeStretch calculates all values when time stretch % is known
 func CalculateFromTimeStretch(originalTempo, timeStretchPercent float64) TempoChangeResult {
-	if originalTempo <= 0 || timeStretchPercent <= 0 {
+	if !(timeStretchPercent > 0) {
 		return TempoChangeResult{}
 	}
-
-	newTempo := originalTempo / (timeStretchPercent / 100.0)
-	return CalculateFromNewTempo(originalTempo, newTempo)
+	return CalculateFromNewTempo(originalTempo, originalTempo/(timeStretchPercent/100.0))
 }
 
 // CalculateFromTranspose calculates all values when transpose semitones/cents are known
 func CalculateFromTranspose(originalTempo float64, semitones, cents int) TempoChangeResult {
-	if originalTempo <= 0 {
-		return TempoChangeResult{}
-	}
-
-	// Convert semitones and cents to full semitones
-	totalSemitones := float64(semitones) + (float64(cents) / 100.0)
-
-	// Calculate new tempo: newTempo = originalTempo * 2^(semitones/12)
-	newTempo := originalTempo * math.Pow(2.0, totalSemitones/12.0)
-
-	return CalculateFromNewTempo(originalTempo, newTempo)
+	totalSemitones := float64(semitones) + float64(cents)/100.0
+	return CalculateFromNewTempo(originalTempo, originalTempo*math.Pow(2.0, totalSemitones/12.0))
 }
 
-// CalculateFromCentsChange calculates transpose values when cents change is known
-func CalculateFromCentsChange(centsChange int) (semitones, cents int) {
-	// Convert total cents to semitones and remaining cents
-	totalSemitones := float64(centsChange) / 100.0
-	semitones = int(totalSemitones)
-	cents = centsChange - (semitones * 100)
+// NormalizeTranspose wraps cents into -50 to +50 by moving whole semitones, then limits the shift
+// so the new tempo stays within the supported range. A limited shift is written as whole semitones
+// down plus 0 to 99 cents, rounded towards the inside of the range. An original tempo outside the
+// range is left for CalculateFromTranspose to reject.
+func NormalizeTranspose(originalTempo float64, semitones, cents int) (int, int) {
+	if cents > 50 {
+		k := (cents - 50 + 99) / 100
+		semitones, cents = semitones+k, cents-100*k
+	} else if cents < -50 {
+		k := (-50 - cents + 99) / 100
+		semitones, cents = semitones-k, cents+100*k
+	}
+	if !TempoInRange(originalTempo) {
+		return semitones, cents
+	}
 
-	return semitones, cents
+	total := semitones*100 + cents
+	maxCents := int(math.Floor(1200 * math.Log2(MaxTempoBPM/originalTempo)))
+	minCents := int(math.Ceil(1200 * math.Log2(MinTempoBPM/originalTempo)))
+	switch {
+	case total > maxCents:
+		total = maxCents
+	case total < minCents:
+		total = minCents
+	default:
+		return semitones, cents
+	}
+	down := floorDiv(total, 100)
+	return down, total - down*100
 }

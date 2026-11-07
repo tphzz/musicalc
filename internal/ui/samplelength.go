@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"musicalc/internal/i18n"
 	"musicalc/internal/logic"
 	"musicalc/internal/ui/widgets"
@@ -84,16 +85,15 @@ func NewSampleLengthTab() *View {
 		bt := logic.ParseFloat(beatsInput.Text)
 		bpm := logic.ParseFloat(tempoEntry.Text)
 
-		if bpm > 0 && sr > 0 {
-			res := logic.GetSampleData(sr, bpm, bt)
-			samplesEntry.SetText(fmt.Sprintf("%d", res.Samples))
-			// Format ms: omit .00 suffix if whole number
-			if res.MS == float64(int(res.MS)) {
-				msEntry.SetText(fmt.Sprintf("%d", int(res.MS)))
-			} else {
-				msEntry.SetText(fmt.Sprintf("%.2f", res.MS))
-			}
+		res := logic.GetSampleData(sr, bpm, bt)
+		if !res.Valid {
+			// Invalid input must not leave earlier results looking current
+			samplesEntry.SetText("")
+			msEntry.SetText("")
+			return
 		}
+		samplesEntry.SetText(fmt.Sprintf("%d", res.Samples))
+		msEntry.SetText(logic.FormatTwoDecimals(res.MS))
 	}
 
 	// Calculate from Samples (when Samples is input)
@@ -109,22 +109,15 @@ func NewSampleLengthTab() *View {
 		bt := logic.ParseFloat(beatsInput.Text)
 		samples := logic.ParseFloat(samplesEntry.Text)
 
-		if samples > 0 && sr > 0 && bt > 0 {
-			ms := (samples / sr) * 1000.0
-			bpm := (60.0 / (ms / 1000.0)) * bt
-			// Format ms: omit .00 suffix if whole number
-			if ms == float64(int(ms)) {
-				msEntry.SetText(fmt.Sprintf("%d", int(ms)))
-			} else {
-				msEntry.SetText(fmt.Sprintf("%.2f", ms))
-			}
-			// Format bpm: omit .00 suffix if whole number
-			if bpm == float64(int(bpm)) {
-				tempoEntry.SetText(fmt.Sprintf("%d", int(bpm)))
-			} else {
-				tempoEntry.SetText(fmt.Sprintf("%.2f", bpm))
-			}
+		ms := samples / sr * 1000.0
+		bpm := 60000.0 * bt / ms
+		if !(samples > 0 && sr > 0 && bt > 0) || math.IsInf(ms, 0) || math.IsInf(bpm, 0) || math.IsNaN(bpm) {
+			msEntry.SetText("")
+			tempoEntry.SetText("")
+			return
 		}
+		msEntry.SetText(logic.FormatTwoDecimals(ms))
+		tempoEntry.SetText(logic.FormatTwoDecimals(bpm))
 	}
 
 	// Calculate from MS (when MS is input)
@@ -140,17 +133,15 @@ func NewSampleLengthTab() *View {
 		bt := logic.ParseFloat(beatsInput.Text)
 		ms := logic.ParseFloat(msEntry.Text)
 
-		if ms > 0 && sr > 0 && bt > 0 {
-			samples := int((ms / 1000.0) * sr)
-			bpm := (60.0 / (ms / 1000.0)) * bt
-			samplesEntry.SetText(fmt.Sprintf("%d", samples))
-			// Format bpm: omit .00 suffix if whole number
-			if bpm == float64(int(bpm)) {
-				tempoEntry.SetText(fmt.Sprintf("%d", int(bpm)))
-			} else {
-				tempoEntry.SetText(fmt.Sprintf("%.2f", bpm))
-			}
+		samples, ok := logic.SamplesIn(ms, sr)
+		bpm := 60000.0 * bt / ms
+		if !ok || !(bt > 0) || math.IsInf(bpm, 0) || math.IsNaN(bpm) {
+			samplesEntry.SetText("")
+			tempoEntry.SetText("")
+			return
 		}
+		samplesEntry.SetText(fmt.Sprintf("%d", samples))
+		tempoEntry.SetText(logic.FormatTwoDecimals(bpm))
 	}
 
 	// Wire up change handlers

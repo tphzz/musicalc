@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -65,13 +66,67 @@ func (c *AlignmentDelayCalculator) SpeedOfSoundMetersPerSecond() float64 {
 	return SpeedOfSound(c.TemperatureC)
 }
 
-func (c *AlignmentDelayCalculator) Recalculate() {
+// Reasons a setup cannot be calculated
+var (
+	ErrTemperatureRange = errors.New("temperature outside the accepted range")
+	ErrReferenceInvalid = errors.New("the reference distance is not a finite distance of 0 or more")
+	ErrMicInvalid       = errors.New("a mic distance is not a finite distance of 0 or more")
+	ErrSampleRate       = errors.New("the sample rate is not positive")
+	ErrDelayTooLarge    = errors.New("a delay is too long to count in samples")
+)
+
+// maxDelaySamples bounds sample counts well inside the exactly representable integers
+const maxDelaySamples = 1e15
+
+// SampleCountInRange reports whether a delay of seconds at rate samples per second can be counted
+// in whole samples exactly (below 1e15), so it is never shown as Inf or a meaningless number
+func SampleCountInRange(seconds float64, rate int) bool {
+	return math.Abs(seconds*float64(rate)) < maxDelaySamples
+}
+
+// Validate reports why the setup cannot be calculated, or nil
+func (c *AlignmentDelayCalculator) Validate() error {
+	switch {
+	case !TemperatureInRange(c.TemperatureC):
+		return ErrTemperatureRange
+	case !validDistance(c.ReferenceDistanceMeters):
+		return ErrReferenceInvalid
+	case c.SampleRate <= 0:
+		return ErrSampleRate
+	}
+	for _, m := range c.Mics {
+		if !validDistance(m.DistanceMeters) {
+			return ErrMicInvalid
+		}
+		if !SampleCountInRange((c.ReferenceDistanceMeters-m.DistanceMeters)/c.SpeedOfSoundMetersPerSecond(), c.SampleRate) {
+			return ErrDelayTooLarge
+		}
+	}
+	return nil
+}
+
+// Recalculate works out every mic's delay. For an invalid setup it clears the delays and returns
+// the reason, rather than results from impossible values.
+func (c *AlignmentDelayCalculator) Recalculate() error {
+	if err := c.Validate(); err != nil {
+		c.ClearDelays()
+		return err
+	}
 	for i := range c.Mics {
 		delayMS, delaySamples, beyond := c.DelayForDistanceMeters(c.Mics[i].DistanceMeters)
 		c.Mics[i].DelayMS = delayMS
 		c.Mics[i].DelaySamples = delaySamples
 		c.Mics[i].IsBeyondReference = beyond
 		c.Mics[i].IsReference = math.Abs(c.ReferenceDistanceMeters-c.Mics[i].DistanceMeters) <= referenceTolerance
+	}
+	return nil
+}
+
+// ClearDelays removes every mic's calculated delay, e.g. while the setup cannot be calculated
+func (c *AlignmentDelayCalculator) ClearDelays() {
+	for i := range c.Mics {
+		c.Mics[i].DelayMS, c.Mics[i].DelaySamples = 0, 0
+		c.Mics[i].IsBeyondReference, c.Mics[i].IsReference = false, false
 	}
 }
 
@@ -82,10 +137,7 @@ func (c *AlignmentDelayCalculator) DelayForDistanceMeters(targetMeters float64) 
 	distanceDiff := c.ReferenceDistanceMeters - targetMeters
 	beyond := distanceDiff < -referenceTolerance
 
-	speed := c.SpeedOfSoundMetersPerSecond()
-	if speed <= 0 {
-		return 0, 0, beyond
-	}
+	speed := c.SpeedOfSoundMetersPerSecond() // positive within the accepted temperatures
 
 	delayMS := (distanceDiff / speed) * 1000
 	delaySamples := int(math.Round(delayMS * float64(c.SampleRate) / 1000))

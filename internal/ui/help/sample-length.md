@@ -40,3 +40,4 @@ Changing the sample rate or the beats keeps the tempo and recalculates both leng
 ## Good to know
 
 - A tempo rarely gives a whole number of samples; the sample count shows whole samples and drops any fraction.
+- While a value is missing, zero or negative, the lengths or the tempo stay empty instead of showing an old result.

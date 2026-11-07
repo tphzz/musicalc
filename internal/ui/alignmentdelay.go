@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"errors"
 	"musicalc/internal/i18n"
 	"slices"
 	"strconv"
@@ -205,6 +206,12 @@ func NewAlignmentDelayTab() *View {
 	var micTextRefresh []func()
 	listHeader := texts.muted("alignment.delay_title")
 	emptyHint := wrappedMuted("")
+	// The setup warning explains why no delays are shown, in the stereo hint's warning card
+	setupWarningText := wrappedMuted("")
+	setupWarning := widgets.NewCard(setupWarningText)
+	setupWarning.SetOutline(theme.ColorNameWarning)
+	var setupErr error   // why the setup cannot be calculated, or nil
+	addRejected := false // the last Add had a distance that cannot be used
 
 	newMicCard := func(index int, mic logic.AlignmentMic) fyne.CanvasObject {
 		name := widgets.NewStyledText(mic.Name, theme.ColorNameForeground, theme.SizeNameText, fyne.TextStyle{Bold: true})
@@ -220,7 +227,11 @@ func NewAlignmentDelayTab() *View {
 
 		delayText, samplesText := logic.FormatTrim(mic.DelayMS, 2)+" ms", alignmentSamplesText(mic)
 		delayColor, samplesColor := theme.ColorNameForeground, theme.ColorNamePlaceHolder
+		valid := setupErr == nil
 		switch {
+		case !valid:
+			delayText, samplesText = "–", ""
+			delayColor = theme.ColorNamePlaceHolder
 		case mic.IsReference:
 			delayText = "0 ms"
 			delayColor = theme.ColorNamePlaceHolder
@@ -231,7 +242,9 @@ func NewAlignmentDelayTab() *View {
 		}
 		alignRight := func(o fyne.CanvasObject) fyne.CanvasObject { return container.NewBorder(nil, nil, nil, o) }
 		samplesDisplay := widgets.NewStyledText(samplesText, samplesColor, theme.SizeNameText, fyne.TextStyle{})
-		micTextRefresh = append(micTextRefresh, func() { widgets.SetStyledText(samplesDisplay, alignmentSamplesText(mic), "") })
+		if valid {
+			micTextRefresh = append(micTextRefresh, func() { widgets.SetStyledText(samplesDisplay, alignmentSamplesText(mic), "") })
+		}
 		result := textLines(
 			alignRight(widgets.NewStyledText(delayText, delayColor, theme.SizeNameText, fyne.TextStyle{Bold: true})),
 			alignRight(samplesDisplay),
@@ -276,7 +289,17 @@ func NewAlignmentDelayTab() *View {
 		calc.SetTemperature(temp.Base, logic.UnitCelsius)
 		calc.SetSampleRateLabel(sampleRateSelect.Selected)
 		calc.SetReferenceDistance(ref.Base, logic.UnitMeters)
-		calc.Recalculate()
+		// Empty or unreadable temperature and reference text must not stand for 0
+		switch {
+		case !temp.Valid():
+			setupErr = logic.ErrTemperatureRange
+			calc.ClearDelays()
+		case !ref.Valid():
+			setupErr = logic.ErrReferenceInvalid
+			calc.ClearDelays()
+		default:
+			setupErr = calc.Recalculate()
+		}
 
 		renderSetup()
 		micTextRefresh = nil
@@ -286,7 +309,11 @@ func NewAlignmentDelayTab() *View {
 		for _, p := range logic.StereoPairs(calc.Mics) {
 			hints[max(p.Left, p.Right)] = p
 		}
-		cards := make([]fyne.CanvasObject, 0, len(calc.Mics)+len(hints)+1)
+		cards := make([]fyne.CanvasObject, 0, len(calc.Mics)+len(hints)+2)
+		if setupErr != nil || addRejected {
+			widgets.SetStyledText(setupWarningText, alignmentSetupMessage(setupErr, addRejected), "")
+			cards = append(cards, setupWarning)
+		}
 		if len(calc.Mics) == 0 {
 			cards = append(cards, emptyHint)
 		} else {
@@ -294,7 +321,7 @@ func NewAlignmentDelayTab() *View {
 		}
 		for i, mic := range calc.Mics {
 			cards = append(cards, newMicCard(i, mic))
-			if p, ok := hints[i]; ok {
+			if p, ok := hints[i]; ok && setupErr == nil {
 				cards = append(cards, newPairHint(p))
 			}
 		}
@@ -309,10 +336,18 @@ func NewAlignmentDelayTab() *View {
 			name = i18n.T("alignment.mic", len(calc.Mics)+1)
 		}
 
-		dist := logic.ParseFloat(targetDistEntry.Text)
-		if dist == 0 {
+		text := strings.TrimSpace(targetDistEntry.Text)
+		dist, ok := logic.ParseNumber(text)
+		if text == "" || (ok && dist == 0) {
 			return
 		}
+		if !ok || dist < 0 {
+			// A distance from the source cannot be negative; keep the text for correcting it
+			addRejected = true
+			refresh()
+			return
+		}
+		addRejected = false
 		calc.AddMic(name, dist, distUnitSelect.Selected)
 
 		micNameSelect.SetText("")
@@ -329,13 +364,9 @@ func NewAlignmentDelayTab() *View {
 
 	// Restore the last session, or start with useful defaults: 20 °C is the usual reference
 	// temperature, 3 m a typical room mic distance
-	var session logic.SessionState
-	if data := fyne.CurrentApp().Preferences().String(prefAlignmentSession); data == "" ||
-		json.Unmarshal([]byte(data), &session) != nil {
-		session = logic.SessionState{
-			Preset:       logic.Preset{Source: "Snare", ReferenceMeters: 3, DistanceUnit: logic.UnitMeters, SampleRate: 48000},
-			TemperatureC: 20, TemperatureUnit: logic.UnitCelsius,
-		}
+	session, sessionErr := restoreAlignmentSession(fyne.CurrentApp().Preferences().String(prefAlignmentSession))
+	if sessionErr != nil {
+		showErrorDialog(errors.New(i18n.T("alignment.session_error", alignmentErrorText(sessionErr))))
 	}
 	restoring = true
 	if session.TemperatureUnit != "" {
@@ -417,4 +448,65 @@ func (l fixedWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 		height = fyne.Max(height, o.MinSize().Height)
 	}
 	return fyne.NewSize(l.width, height)
+}
+
+// defaultAlignmentSession is the first-use setup: 20 °C is the usual reference temperature, 3 m a
+// typical room mic distance
+func defaultAlignmentSession() logic.SessionState {
+	return logic.SessionState{
+		Preset:       logic.Preset{Source: "Snare", ReferenceMeters: 3, DistanceUnit: logic.UnitMeters, SampleRate: 48000},
+		TemperatureC: 20, TemperatureUnit: logic.UnitCelsius,
+	}
+}
+
+// restoreAlignmentSession reads the stored session. Nothing stored gives the defaults; a session
+// that cannot be read or is not a usable setup gives the defaults and the reason, so it is not
+// silently replaced.
+func restoreAlignmentSession(data string) (logic.SessionState, error) {
+	if data == "" {
+		return defaultAlignmentSession(), nil
+	}
+	var s logic.SessionState
+	if err := json.Unmarshal([]byte(data), &s); err != nil {
+		return defaultAlignmentSession(), errStoredUnreadable
+	}
+	if err := logic.ValidateSession(&s); err != nil {
+		return defaultAlignmentSession(), err
+	}
+	return s, nil
+}
+
+// errStoredUnreadable is stored data that is not valid JSON of the expected shape
+var errStoredUnreadable = errors.New("the stored data is damaged")
+
+// alignmentErrorText describes why a setup, a stored session or stored presets cannot be used
+func alignmentErrorText(err error) string {
+	switch {
+	case errors.Is(err, errStoredUnreadable):
+		return i18n.T("stored.unreadable")
+	case errors.Is(err, logic.ErrTemperatureRange):
+		return i18n.T("alignment.invalid_temperature")
+	case errors.Is(err, logic.ErrReferenceInvalid):
+		return i18n.T("alignment.invalid_reference")
+	case errors.Is(err, logic.ErrMicInvalid):
+		return i18n.T("alignment.invalid_mic")
+	case errors.Is(err, logic.ErrDelayTooLarge):
+		return i18n.T("alignment.invalid_delay")
+	case errors.Is(err, logic.ErrSampleRate):
+		return i18n.T("alignment.invalid_rate")
+	default:
+		return presetErrorText(err)
+	}
+}
+
+// alignmentSetupMessage is the setup warning: why no delays are shown, and a rejected distance
+func alignmentSetupMessage(setupErr error, addRejected bool) string {
+	var parts []string
+	if setupErr != nil {
+		parts = append(parts, i18n.T("alignment.no_delays", alignmentErrorText(setupErr)))
+	}
+	if addRejected {
+		parts = append(parts, i18n.T("alignment.invalid_distance"))
+	}
+	return strings.Join(parts, " ")
 }

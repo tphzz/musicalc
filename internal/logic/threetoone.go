@@ -56,22 +56,23 @@ type SpillResult struct {
 	// target, with the other settings unchanged; in the unit of the distances
 	MinNeighbour float64
 
-	// CombBoostDB and CombCutDB bound the comb filtering when both contributions are otherwise
-	// identical: mixing them boosts some frequencies and cuts others. When CanCancel is set the
-	// spill is at least as loud as the own mic, so some frequencies can cancel completely and
-	// CombCutDB is not used.
+	// CombBoostDB and CombCutDB are the highest and lowest level of the mix relative to the own mic
+	// when both contributions are otherwise identical: 20·log10(1+a) and 20·log10(|1−a|) for the
+	// spill amplitude a. CombCutDB is negative (a cut) below a = 2, 0 dB at a = 2 and a boost
+	// above it. Only equal amplitudes (a = 1, within floating-point noise) can cancel completely;
+	// then CanCancel is set and CombCutDB is not used.
 	CombBoostDB float64
 	CombCutDB   float64
 	CanCancel   bool
 
-	Valid bool // both distances are positive
+	Valid bool // finite positive distances, finite gain and target, and finite results
 }
 
 // SpillCheck checks one source that is own away from its mic and neighbour away from the
 // neighbouring mic (both in the same unit). gainDB is how much louder the neighbouring channel is
 // (gain, sensitivity, pickup); targetDB how far below the spill should be.
 func SpillCheck(own, neighbour, gainDB, targetDB float64) SpillResult {
-	if own <= 0 || neighbour <= 0 {
+	if !positiveFinite(own) || !positiveFinite(neighbour) || !finite(gainDB) || !finite(targetDB) {
 		return SpillResult{}
 	}
 	ratio := neighbour / own
@@ -98,10 +99,19 @@ func SpillCheck(own, neighbour, gainDB, targetDB float64) SpillResult {
 
 	a := math.Pow(10, spill/20) // the spill's amplitude relative to the own mic
 	r.CombBoostDB = 20 * math.Log10(1+a)
-	if a >= 1 {
+	// Equal levels up to floating-point noise: 1 m / 10 m with +20 dB gives a = 1 + 4e-16
+	if math.Abs(1-a) <= 1e-12 {
 		r.CanCancel = true
 	} else {
-		r.CombCutDB = 20 * math.Log10(1-a)
+		r.CombCutDB = 20 * math.Log10(math.Abs(1-a))
+	}
+	// A huge gain or distance ratio can overflow; that is not a usable result
+	if !finite(spill) || !finite(r.MinNeighbour) || !finite(r.CombBoostDB) || !finite(r.CombCutDB) || !(a > 0) {
+		return SpillResult{}
 	}
 	return r
+}
+
+func finite(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }

@@ -80,9 +80,10 @@ func NewTapTempoTab(showDelay func()) *View {
 
 	showResult := func() {
 		renderResult()
+		// Delay is only available with a tempo to send, including after a restarted measurement
 		if last.Valid {
 			delayBtn.Enable()
-		} else if last.Taps != 1 {
+		} else {
 			delayBtn.Disable()
 		}
 	}

@@ -16,22 +16,45 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// noValue marks an unavailable table value, as the MIDI column does above note 127
+const noValue = "-"
+
+// Column proportions of the table. A scale without 12 steps shows "degree (period)" and cents of up
+// to "+1088.27" above the root, which need a wider Cents column than deviations from 12-TET.
+var (
+	noteColumns = []float32{0.18, 0.32, 0.22, 0.28}
+	stepColumns = []float32{0.18, 0.30, 0.28, 0.24}
+)
+
 func NewDiapasonTab() *View {
 	texts := newTextRefresh()
 	// Reference frequency binding
 	refFreq := binding.NewString()
 	_ = refFreq.Set("440")
 
-	// Reference note binding (default A3 = MIDI 57)
+	// Reference note binding (default A3, MIDI note 69 in C3 naming)
 	refNote := binding.NewString()
 	_ = refNote.Set("A3")
 
-	// Tuning system binding
-	tuning := binding.NewString()
-	_ = tuning.Set(sclres.DefaultScaleName)
-
-	// Build reference note options (C0 to B9)
-	noteNames := []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
+	// The selected tuning and the pitch class its degree 0 is laid on (0 = C … 11 = B)
+	tuningName := sclres.DefaultScaleName
+	tonics := make(map[string]int)
+	for _, t := range sclres.Tunings() {
+		tonics[t.Name] = t.Tonic
+	}
+	root := tonics[tuningName]
+	steps := 12 // degrees per period of the tuning, known even while the reference is invalid
+	selectTuning := func(name string) {
+		tuningName, root = name, tonics[name]
+		n, err := logic.ScaleSteps(name)
+		if err != nil {
+			// Every bundled tuning parses (checked by the logic tests). Should one not, NewDiapason
+			// fails the same way and the table shows "-" values under note names.
+			n = 12
+		}
+		steps = n
+	}
+	selectTuning(tuningName)
 
 	// Tuning options: one submenu per catalog group (Equal, Just, Historic, World), short names inside
 	buildTuningGroups := func() []widgets.MenuGroup {
@@ -49,13 +72,6 @@ func NewDiapasonTab() *View {
 		return tuningGroups
 	}
 	tuningGroups := buildTuningGroups()
-
-	// Reset function
-	resetToDefaults := func() {
-		_ = refNote.Set("A3")
-		_ = refFreq.Set("440")
-		_ = tuning.Set(sclres.DefaultScaleName)
-	}
 
 	// Reference note selector (simple entry, no longer needed for note selection)
 	refNoteEntry := widget.NewEntry()
@@ -80,86 +96,103 @@ func NewDiapasonTab() *View {
 
 	// Track previous Middle C selection to avoid adjusting on unchanged selections
 	previousMiddleC := "C3"
-
-	// Tuning selector (grouped dropdown with submenus; its values are the scale names)
-	tuningSelect := widgets.NewMenuSelect(tuningGroups, func(name string) {
-		_ = tuning.Set(name)
-	})
-	tuningSelect.SetSelected(sclres.DefaultScaleName)
-
-	// Declare table variable first for use in reset button
-	var table *widget.Table
-
-	// Cache for performance - avoid binding.Get() on every cell render
-	var cachedRefHz float64
-	var cachedOctaveOffset int
-	var cachedTuningName string
-	var cachedRefMidi int
-
-	// Helper function to parse note name to MIDI number
-	parseNoteToMidi := func(noteName string, octaveOffset int) int {
-		if len(noteName) < 2 {
-			return 69 // Default to A4
+	octaveOffset := func(convention string) int {
+		if convention == "C4" {
+			return logic.OctaveOffsetC4
 		}
-
-		// Parse note name (e.g., "A3", "C#4")
-		var note string
-		var octave int
-
-		// Handle sharp notes (e.g., C#, D#)
-		if len(noteName) > 2 && noteName[1] == '#' {
-			note = noteName[:2]
-			fmt.Sscanf(noteName[2:], "%d", &octave)
-		} else {
-			note = noteName[:1]
-			fmt.Sscanf(noteName[1:], "%d", &octave)
-		}
-
-		noteIndex := 0
-		for i, n := range noteNames {
-			if n == note {
-				noteIndex = i
-				break
-			}
-		}
-		// Calculate MIDI using the octaveOffset from Middle C convention
-		return (octave+octaveOffset)*12 + noteIndex
+		return logic.OctaveOffsetC3
 	}
 
-	// Update cache function
+	// Declare table variables first for use in the callbacks below
+	var table *widget.Table
+	var responsiveTableWidget *ResponsiveTable
+
+	// The tuning laid out on the keys, rebuilt when an input changes rather than per table cell.
+	// It is nil while the reference note or frequency is invalid; the table then shows no values.
+	var diapason *logic.Diapason
+	var cachedOctaveOffset int
+	cachedRefMidi := -1 // -1 while the reference is invalid
+
 	updateCache := func() {
 		refFreqVal, _ := refFreq.Get()
 		refNoteVal, _ := refNote.Get()
-		tuningVal, _ := tuning.Get()
 
-		// Determine octave offset based on Middle C setting
-		if middleCRadio.Selected == "C3" {
-			cachedOctaveOffset = 2 // C3 convention
-		} else {
-			cachedOctaveOffset = 1 // C4 convention
+		cachedOctaveOffset = octaveOffset(middleCRadio.Selected)
+		diapason, cachedRefMidi = nil, -1
+		refMidi, err := logic.ParseNoteName(refNoteVal, cachedOctaveOffset)
+		if err != nil {
+			return
 		}
-
-		cachedRefHz = logic.ParseFloat(refFreqVal)
-		cachedTuningName = tuningVal
-
-		// Parse reference note to MIDI number
-		cachedRefMidi = parseNoteToMidi(refNoteVal, cachedOctaveOffset)
+		d, err := logic.NewDiapason(tuningName, root, refMidi, logic.ParseFloat(refFreqVal))
+		if err != nil {
+			return
+		}
+		diapason, cachedRefMidi = d, refMidi
 	}
+
+	// refreshTable recalculates the table and switches its columns between note names and degrees
+	refreshTable := func() {
+		updateCache()
+		if table == nil || responsiveTableWidget == nil {
+			return
+		}
+		if steps == 12 {
+			responsiveTableWidget.SetProportions(noteColumns)
+		} else {
+			responsiveTableWidget.SetProportions(stepColumns)
+		}
+		table.Refresh()
+	}
+
+	// Scale root selector: C … B, the tuning's catalogue tonic marked as its default
+	rootSelect := widget.NewSelect(nil, nil)
+	rootOptions := func() []string {
+		options := make([]string, 12)
+		for pc := range options {
+			options[pc] = logic.PitchClassName(pc)
+			if pc == tonics[tuningName] {
+				options[pc] = i18n.T("field.scale_default", options[pc])
+			}
+		}
+		return options
+	}
+	// showRoot lists the options for the current tuning and selects root without a callback
+	showRoot := func() {
+		rootSelect.OnChanged = nil
+		rootSelect.SetOptions(rootOptions())
+		rootSelect.SetSelectedIndex(root)
+		rootSelect.OnChanged = func(string) {
+			root = rootSelect.SelectedIndex()
+			refreshTable()
+		}
+	}
+	showRoot()
+
+	// Tuning selector (grouped dropdown with submenus; its values are the scale names). Picking a
+	// tuning puts its root on the scale's own tonic.
+	tuningSelect := widgets.NewMenuSelect(tuningGroups, func(name string) {
+		selectTuning(name)
+		showRoot()
+		refreshTable()
+	})
+	tuningSelect.SetSelected(sclres.DefaultScaleName)
 
 	// Initialize cache
 	updateCache()
 
 	// Reset button
 	resetBtn := texts.buttonWithIcon("action.reset", theme.ViewRefreshIcon(), func() {
-		resetToDefaults()
+		// The convention goes first: switching it renames the current reference, which must not
+		// shift the restored A3 by an octave
+		middleCRadio.SetSelected("C3")
+		selectTuning(sclres.DefaultScaleName)
+		tuningSelect.SetSelected(tuningName)
+		showRoot()
+		_ = refNote.Set("A3")
+		_ = refFreq.Set("440")
 		refNoteEntry.SetText("A3")
 		freqInput.SetText("440")
-		middleCRadio.SetSelected("C3")
-		tuningSelect.SetSelected(sclres.DefaultScaleName)
-		updateCache()
-		if table != nil {
-			table.Refresh()
-		}
+		refreshTable()
 	})
 
 	// Table displaying all notes from C-2 to B8 (132 rows; MIDI note numbers only go to 127)
@@ -178,7 +211,13 @@ func NewDiapasonTab() *View {
 			// MIDI note starts at 0 (C-2)
 			midiNote := id.Row
 
-			// Highlight the reference row; a bold C marks the start of each octave
+			var result logic.NoteFrequency
+			if diapason != nil {
+				result = diapason.Note(midiNote)
+			}
+
+			// Highlight the reference row; a bold first column marks each root (degree 0). In a
+			// 12-step scale the root is a note name, so it is known without a valid reference.
 			isReference := midiNote == cachedRefMidi
 			if isReference {
 				highlight.FillColor = theme.Color(theme.ColorNameSelection)
@@ -186,23 +225,42 @@ func NewDiapasonTab() *View {
 				highlight.FillColor = color.Transparent
 			}
 			highlight.Refresh()
-			l.TextStyle = fyne.TextStyle{Bold: isReference || (id.Col == 0 && midiNote%12 == 0)}
-
-			// Use cached values for performance (updated only when bindings change)
-			// Calculate frequency using selected tuning
-			result := logic.GetFrequency(midiNote, cachedRefHz, cachedRefMidi, cachedTuningName)
+			isRoot := diapason != nil && result.Degree == 0
+			if steps == 12 {
+				isRoot = (midiNote-root)%12 == 0
+			}
+			l.TextStyle = fyne.TextStyle{Bold: isReference || (id.Col == 0 && isRoot)}
 
 			switch id.Col {
 			case 0:
-				l.SetText(fmt.Sprintf("%s%d", noteNames[midiNote%12], (midiNote/12)-cachedOctaveOffset))
+				switch {
+				case steps == 12:
+					l.SetText(logic.NoteName(midiNote, cachedOctaveOffset))
+				case diapason == nil:
+					l.SetText(noValue) // the degree depends on the reference key
+				default:
+					l.SetText(fmt.Sprintf("%d (%d)", result.Degree, result.Period))
+				}
 			case 1:
+				if diapason == nil {
+					l.SetText(noValue)
+					return
+				}
 				l.SetText(fmt.Sprintf("%.2f Hz", result.Frequency))
 			case 2:
-				// Display cents deviation from 12-TET
-				if result.Cents >= 0 {
-					l.SetText(fmt.Sprintf("+%.2f", result.Cents))
+				if diapason == nil {
+					l.SetText(noValue)
+					return
+				}
+				// 12 steps: the deviation from 12-TET; otherwise the degree above its period's root
+				cents := result.Cents
+				if steps != 12 {
+					cents = result.DegreeCents
+				}
+				if cents >= 0 {
+					l.SetText(fmt.Sprintf("+%.2f", cents))
 				} else {
-					l.SetText(fmt.Sprintf("%.2f", result.Cents))
+					l.SetText(fmt.Sprintf("%.2f", cents))
 				}
 			case 3:
 				// Show both MIDI conventions: standard (C4=60) / alternative (C3=60)
@@ -212,12 +270,12 @@ func NewDiapasonTab() *View {
 
 				standardStr := fmt.Sprintf("%d", midiStandard)
 				if midiStandard > 127 {
-					standardStr = "-"
+					standardStr = noValue
 				}
 
 				alternativeStr := fmt.Sprintf("%d", midiAlternative)
 				if midiAlternative > 127 {
-					alternativeStr = "-"
+					alternativeStr = noValue
 				}
 
 				l.SetText(fmt.Sprintf("%s / %s", standardStr, alternativeStr))
@@ -242,28 +300,34 @@ func NewDiapasonTab() *View {
 
 		switch id.Col {
 		case 0:
-			l.SetText(i18n.T("field.note"))
+			if steps == 12 {
+				l.SetText(i18n.T("field.note"))
+			} else {
+				l.SetText(i18n.T("field.step"))
+			}
 		case 1:
 			l.SetText(i18n.T("field.frequency"))
 		case 2:
 			l.SetText(i18n.T("field.cents"))
 		case 3:
-			l.SetText("MIDI")
+			l.SetText(i18n.T("field.midi"))
 		}
 	}
 
 	// Hide row header column
 	table.ShowHeaderColumn = false
 
-	// Wrap table in responsive container with proportional column widths
-	// Proportions: Note (18%), Frequency (32%), Cents (22%), MIDI (28%)
+	// Wrap table in responsive container with proportional column widths.
 	// minWidth stays below phone widths (~340) so the proportions also apply on Android
-	responsiveTableWidget := NewResponsiveTable(table, []float32{0.18, 0.32, 0.22, 0.28}, 300, 0)
+	responsiveTableWidget = NewResponsiveTable(table, noteColumns, 300, 0)
 
 	// scrollToReference shows the reference note near the top with two rows of context above it.
 	// Scrolling up to a row puts it at the top (behind the sticky header, hence 3 rows), so jump
 	// to the bottom first.
 	scrollToReference := func() {
+		if cachedRefMidi < 0 {
+			return // keep the position while the reference is being corrected
+		}
 		row := cachedRefMidi - 3
 		if row < 0 {
 			row = 0
@@ -282,32 +346,10 @@ func NewDiapasonTab() *View {
 			return
 		}
 
-		// Adjust reference note octave when convention changes
-		currentRef := refNoteEntry.Text
-		if len(currentRef) >= 2 {
-			// Parse current note
-			var noteName string
-			var octave int
-
-			if len(currentRef) > 2 && currentRef[1] == '#' {
-				noteName = currentRef[:2]
-				fmt.Sscanf(currentRef[2:], "%d", &octave)
-			} else {
-				noteName = currentRef[:1]
-				fmt.Sscanf(currentRef[1:], "%d", &octave)
-			}
-
-			// Adjust octave based on convention change
-			if s == "C4" {
-				// Switching from C3 to C4: increase octave by 1
-				octave++
-			} else {
-				// Switching from C4 to C3: decrease octave by 1
-				octave--
-			}
-
-			// Update reference note
-			newRef := fmt.Sprintf("%s%d", noteName, octave)
+		// Keep the same reference key and rename it in the new convention, e.g. A3 → A4.
+		// An invalid reference is left as typed.
+		if midi, err := logic.ParseNoteName(refNoteEntry.Text, octaveOffset(previousMiddleC)); err == nil {
+			newRef := logic.NoteName(midi, octaveOffset(s))
 			refNoteEntry.SetText(newRef)
 			_ = refNote.Set(newRef)
 		}
@@ -315,28 +357,19 @@ func NewDiapasonTab() *View {
 		// Update previous selection tracker
 		previousMiddleC = s
 
-		updateCache()
-		table.Refresh()
+		refreshTable()
 		scrollToReference()
 	}
 
 	// Add listeners to refresh table when inputs change
-	refFreq.AddListener(binding.NewDataListener(func() {
-		updateCache()
-		table.Refresh()
-	}))
+	refFreq.AddListener(binding.NewDataListener(refreshTable))
 	refNote.AddListener(binding.NewDataListener(func() {
-		updateCache()
-		table.Refresh()
+		refreshTable()
 		scrollToReference()
-	}))
-	tuning.AddListener(binding.NewDataListener(func() {
-		updateCache()
-		table.Refresh()
 	}))
 
 	// Build UI layout
-	texts.add(func() { tuningSelect.SetGroups(buildTuningGroups()); table.Refresh() })
+	texts.add(func() { tuningSelect.SetGroups(buildTuningGroups()); showRoot(); table.Refresh() })
 
 	return texts.view(container.NewBorder(
 		container.NewVBox(
@@ -354,6 +387,10 @@ func NewDiapasonTab() *View {
 			),
 			// The tuning dropdown takes all the width Reset leaves, so its labels show in full
 			container.NewBorder(nil, nil, nil, resetBtn, tuningSelect),
+			container.NewGridWithColumns(2,
+				texts.label("field.scale_root"),
+				rootSelect,
+			),
 			widget.NewSeparator(),
 		),
 		nil, nil, nil,

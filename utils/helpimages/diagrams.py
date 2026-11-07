@@ -84,7 +84,7 @@ def alignment_setup():
     t_ref = 3.0 / c * 1000
     tx0, tx1 = 40, W - 40
     tx = lambda ms: tx0 + (tx1 - tx0) * ms / 10
-    rows = [(305, "Without delay: the hit arrives at different times"), (450, "With the delays added: all at once")]
+    rows = [(305, "As recorded: the hit reaches each mic at its time"), (450, "With the delays in the DAW: the tracks line up")]
     for row, (yy, title) in enumerate(rows):
         d.text((28, yy - 82), title, font=f, fill=TEXT)
         d.line((tx0, yy, tx1, yy), fill=GRID, width=2)
@@ -98,7 +98,7 @@ def alignment_setup():
         else:
             for i, (name, dist, colour, _) in enumerate(mics):
                 d.line((tx(t_ref) - 6 + 6 * i, yy - 18, tx(t_ref) - 6 + 6 * i, yy + 12), fill=colour, width=4)
-            d.text((tx(t_ref) - 210, yy - 46), f"all at {t_ref:.2f} ms", font=fs, fill=TEXT)
+            d.text((tx(t_ref) - 250, yy - 46), f"all tracks at {t_ref:.2f} ms", font=fs, fill=TEXT)
     img.save(os.path.join(OUT, "alignment-setup.png"))
 
 
@@ -134,16 +134,16 @@ def comb_filter():
     d.line(pts, fill=BLUE, width=4, joint="curve")
     for k, lab in ((0, "0"), (1, "1 kHz"), (2, "2"), (3, "3"), (4, "4"), (5, "5 kHz")):
         centered(d, (left + (right - left) * k / 5, bottom + 8), lab, fs, MUTED)
-    d.text((left, top - 40), "peaks (+6 dB) every 1 / Δt, dips in between", font=fs, fill=MUTED)
+    d.text((left, top - 40), "equal levels, normal polarity, Δt = 1 ms: peaks every 1 / Δt", font=fs, fill=MUTED)
     img.save(os.path.join(OUT, "comb-filter.png"))
 
 
 def three_to_one():
-    """Source A, its own mic at d and the neighbouring mic at 3 × d"""
-    img, d = card(330)
+    """Source A, its own mic at d and the neighbouring mic at 3 × d, both measured from the source"""
+    img, d = card(370)
     f, fb, fs = font(size=22), font(True, 22), font(size=19)
-    d.text((28, 20), "One source, two mics", font=fb, fill=TEXT)
-    y = 150
+    d.text((28, 20), "One source, two mics, both measured from it", font=fb, fill=TEXT)
+    y = 190
     sx, own, neigh = 70, 70 + 150, 70 + 450
     d.ellipse((sx - 24, y - 24, sx + 24, y + 24), outline=TEXT, width=4)
     centered(d, (sx, y + 32), "Singer A", fs, MUTED)
@@ -151,13 +151,13 @@ def three_to_one():
     centered(d, (own, y + 32), "its mic", fs, BLUE)
     mic(d, neigh, y - 12, AMBER)
     centered(d, (neigh, y + 32), "neighbour mic", fs, AMBER)
-    arrow(d, (sx + 30, y - 52), (own - 16, y - 52), BLUE)
-    centered(d, ((sx + own) / 2, y - 88), "d", fb, BLUE)
-    d.line((own + 18, y - 52, neigh - 16, y - 52), fill=AMBER, width=3)
-    arrow(d, (neigh - 60, y - 52), (neigh - 16, y - 52), AMBER)
-    centered(d, ((own + neigh) / 2, y - 88), "at least 3 × d", fb, AMBER)
-    d.text((28, 236), "Three times the distance: Singer A's spill in", font=f, fill=TEXT)
-    d.text((28, 268), "the neighbour mic is about 9.5 dB lower.", font=f, fill=TEXT)
+    # Both paths start at the source: d to its mic, 3 × d to the neighbour mic
+    arrow(d, (sx + 30, y - 46), (own - 16, y - 46), BLUE)
+    centered(d, ((sx + own) / 2, y - 80), "d", fb, BLUE)
+    arrow(d, (sx + 30, y - 100), (neigh - 16, y - 100), AMBER)
+    centered(d, ((sx + neigh) / 2, y - 134), "at least 3 × d from Singer A", fb, AMBER)
+    d.text((28, 276), "Three times as far from the source: Singer A's", font=f, fill=TEXT)
+    d.text((28, 308), "spill in the neighbour mic is about 9.5 dB lower.", font=f, fill=TEXT)
     img.save(os.path.join(OUT, "three-to-one.png"))
 
 

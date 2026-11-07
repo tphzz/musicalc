@@ -40,3 +40,4 @@ Ein Wechsel von Samplerate oder Schlaganzahl behält das Tempo und berechnet die
 ## Hinweise
 
 - Ein Tempo ergibt selten eine ganzzahlige Sampleanzahl. Der Rechner zeigt ganze Samples und verwirft den Bruchteil.
+- Solange ein Wert fehlt, null oder negativ ist, bleiben die Längen bzw. das Tempo leer, statt ein altes Ergebnis zu zeigen.

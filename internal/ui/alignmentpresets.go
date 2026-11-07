@@ -43,16 +43,34 @@ type presetController struct {
 // newPresetController loads the stored presets
 func newPresetController(current func() logic.Preset, apply func(logic.Preset), changed func()) *presetController {
 	c := &presetController{current: current, apply: apply, changed: changed}
-	if data := fyne.CurrentApp().Preferences().String(prefAlignmentPresets); data != "" {
-		_ = json.Unmarshal([]byte(data), &c.presets)
+	presets, err := restoreStoredPresets(fyne.CurrentApp().Preferences().String(prefAlignmentPresets))
+	c.presets = presets
+	if err != nil {
+		showErrorDialog(errors.New(i18n.T("preset.stored_error", alignmentErrorText(err))))
 	}
 	return c
+}
+
+// restoreStoredPresets reads the stored preset list. Presets that cannot be used are left out and
+// the first reason is returned; an unreadable list gives no presets and that reason. The stored
+// list is only replaced when the presets change.
+func restoreStoredPresets(data string) ([]logic.Preset, error) {
+	if data == "" {
+		return nil, nil
+	}
+	var presets []logic.Preset
+	if err := json.Unmarshal([]byte(data), &presets); err != nil {
+		return nil, errStoredUnreadable
+	}
+	return logic.ValidatePresets(presets)
 }
 
 // store saves the preset list
 func (c *presetController) store() {
 	data, err := json.Marshal(c.presets)
-	if err == nil {
+	if err != nil {
+		showErrorDialog(errors.New(i18n.T("preset.store_error", err)))
+	} else {
 		fyne.CurrentApp().Preferences().SetString(prefAlignmentPresets, string(data))
 	}
 	c.changed()

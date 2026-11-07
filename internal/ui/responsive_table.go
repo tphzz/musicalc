@@ -82,6 +82,12 @@ func (rr *responsiveTableRenderer) Objects() []fyne.CanvasObject {
 
 func (rr *responsiveTableRenderer) Destroy() {}
 
+// SetProportions changes the column proportions and applies them at the current width
+func (r *ResponsiveTable) SetProportions(columnProportions []float32) {
+	r.columnProportions = columnProportions
+	r.updateColumnWidths(r.Size().Width)
+}
+
 // updateColumnWidths recalculates and applies proportional column widths
 func (r *ResponsiveTable) updateColumnWidths(width float32) {
 	if width < r.minWidth {
