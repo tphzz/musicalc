@@ -40,10 +40,20 @@ $previousEnvironment = @{}
 foreach ($name in $environment.Keys) {
     $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
 }
+# Removes the variable for $null. PowerShell passes $null to .NET string parameters as "", and
+# only Windows PowerShell's .NET Framework deletes a variable set to ""; PowerShell 7 keeps it
+# empty, and Git rejects an empty GIT_DIR.
+function Set-ProcessVariable([string]$Name, $Value) {
+    if ($null -eq $Value) {
+        Remove-Item "Env:$Name" -ErrorAction SilentlyContinue
+    } else {
+        Set-Item "Env:$Name" $Value
+    }
+}
 Push-Location $projectRoot
 try {
     foreach ($name in $environment.Keys) {
-        [Environment]::SetEnvironmentVariable($name, $environment[$name], "Process")
+        Set-ProcessVariable $name $environment[$name]
     }
     # Keep Go 1.26 VCS stamps on this checkout for submodules and worktrees.
     $env:GIT_DIR = & git rev-parse --absolute-git-dir
@@ -59,7 +69,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Windows binary verification failed with exit code $LASTEXITCODE" }
 } finally {
     foreach ($name in $previousEnvironment.Keys) {
-        [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], "Process")
+        Set-ProcessVariable $name $previousEnvironment[$name]
     }
     Pop-Location
 }

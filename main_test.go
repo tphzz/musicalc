@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"image/png"
 	"musicalc/internal/i18n"
 	"strings"
 	"testing"
@@ -40,6 +41,31 @@ func TestGermanCategoryMenu(t *testing.T) {
 		t.Fatal("menu is not German")
 	}
 }
+
+// TestEmbeddedAppIcon checks that the window icon is compiled in as a complete PNG, so it does not
+// depend on the working directory the app starts from
+func TestEmbeddedAppIcon(t *testing.T) {
+	img, err := png.Decode(bytes.NewReader(appIcon))
+	if err != nil {
+		t.Fatalf("embedded app icon is not a PNG: %v", err)
+	}
+	if b := img.Bounds(); b.Dx() < 64 || b.Dy() < 64 {
+		t.Errorf("embedded app icon is %v, want at least 64×64", b.Size())
+	}
+	// Fyne's test app ignores SetIcon, so record the call
+	a := &iconRecorder{App: test.NewTempApp(t)}
+	setAppIcon(a)
+	if a.icon == nil || !bytes.Equal(a.icon.Content(), appIcon) {
+		t.Error("the app does not use the embedded icon")
+	}
+}
+
+type iconRecorder struct {
+	fyne.App
+	icon fyne.Resource
+}
+
+func (r *iconRecorder) SetIcon(icon fyne.Resource) { r.icon = icon }
 
 func TestWriteVersion(t *testing.T) {
 	previous := version
