@@ -82,14 +82,37 @@ func TestSpillCheckGain(t *testing.T) {
 	if quieter.MinNeighbour >= base.MinNeighbour {
 		t.Errorf("a quieter neighbour may come closer: %v vs %v", quieter.MinNeighbour, base.MinNeighbour)
 	}
-	// Spill at or above the own mic: full cancellation is possible
+	// Only equal amplitudes cancel completely: louder spill has a finite minimum
 	loud := SpillCheck(1, 3, 12, classicTarget)
-	if !near(loud.SpillDB, 2.458, 0.001) || !loud.CanCancel || loud.MeetsTarget {
-		t.Errorf("+12 dB gain: got %+v", loud)
+	if !near(loud.SpillDB, 2.457574906, 1e-9) || loud.CanCancel || loud.MeetsTarget ||
+		!near(loud.CombCutDB, -9.708410081, 1e-9) || !near(loud.CombBoostDB, 7.336016883, 1e-9) {
+		t.Errorf("+12 dB gain: got %+v, want a = 1.327, -9.708 to +7.336 dB and no cancellation", loud)
 	}
 	equal := SpillCheck(1, 1, 0, classicTarget)
 	if !equal.CanCancel || !near(equal.CombBoostDB, 6.021, 0.001) {
 		t.Errorf("equal distances: got %+v", equal)
+	}
+}
+
+// TestSpillCheckEnvelope checks the comb bounds 20·log10(1+a) and 20·log10(|1-a|) just below, at
+// and above unity, at a = 2 and above, where even the minimum is a boost
+func TestSpillCheckEnvelope(t *testing.T) {
+	for _, tc := range []struct {
+		gain      float64 // with own = neighbour, the spill amplitude is 10^(gain/20)
+		cancel    bool
+		cut, peak float64
+	}{
+		{-20, false, -0.915149811, 0.827853703},
+		{-0.1, false, -38.826238, 5.970744},
+		{0, true, 0, 6.020599913},
+		{0.1, false, -38.726238, 6.070744},
+		{20 * math.Log10(2), false, 0, 9.542425094},
+		{20, false, 19.084850189, 20.827853703},
+	} {
+		r := SpillCheck(1, 1, tc.gain, 10)
+		if !r.Valid || r.CanCancel != tc.cancel || !near(r.CombBoostDB, tc.peak, 1e-3) || (!tc.cancel && !near(r.CombCutDB, tc.cut, 1e-3)) {
+			t.Errorf("gain %+.4f dB: cancel %v, cut %.6f, peak %.6f; want %v, %.6f, %.6f", tc.gain, r.CanCancel, r.CombCutDB, r.CombBoostDB, tc.cancel, tc.cut, tc.peak)
+		}
 	}
 }
 
@@ -111,12 +134,53 @@ func TestSpillCheckUnitsAndInvalid(t *testing.T) {
 	if !near(m.SpillDB, ft.SpillDB, 1e-9) || !near(ft.MinNeighbour, ConvertDistance(m.MinNeighbour, UnitMeters, UnitFeet), 1e-9) {
 		t.Errorf("feet: got %+v, metres %+v", ft, m)
 	}
-	for _, d := range [][2]float64{{0, 3}, {1, 0}, {-1, 3}, {1, -3}} {
+	for _, d := range [][2]float64{{0, 3}, {1, 0}, {-1, 3}, {1, -3}, {math.NaN(), 3}, {math.Inf(1), 3}, {1, math.Inf(1)}} {
 		if r := SpillCheck(d[0], d[1], 0, 10); r.Valid {
 			t.Errorf("%v should be invalid: %+v", d, r)
 		}
 	}
+	// Non-finite or overflowing gain is not a result
+	for _, g := range []float64{math.NaN(), math.Inf(1), 1e6, -1e6} {
+		if r := SpillCheck(1, 3, g, 10); r.Valid {
+			t.Errorf("gain %v should be invalid: %+v", g, r)
+		}
+	}
+	if r := SpillCheck(1, 3, 0, math.NaN()); r.Valid {
+		t.Error("NaN target should be invalid")
+	}
 	if math.IsNaN(SpillCheck(1, 3, 0, 10).CombCutDB) {
 		t.Error("comb cut is NaN")
+	}
+}
+
+// TestSpillCheckEqualLevelsFromGain checks that a distance ratio exactly made up by the gain counts
+// as equal levels, although the floating-point amplitude is off by a few units in the last place
+func TestSpillCheckEqualLevelsFromGain(t *testing.T) {
+	for _, tc := range []struct{ own, neighbour, gain float64 }{
+		{1, 10, 20}, {0.5, 5, 20}, {3, 30, 20}, {1, 3, classicTarget}, {1, 2, 20 * math.Log10(2)},
+	} {
+		if r := SpillCheck(tc.own, tc.neighbour, tc.gain, 10); !r.Valid || !r.CanCancel || !near(r.CombBoostDB, 6.0206, 1e-3) {
+			t.Errorf("%v m / %v m, %+.4f dB: %+v, want equal levels that can cancel", tc.own, tc.neighbour, tc.gain, r)
+		}
+	}
+}
+
+// TestMinimumAdviceMeetsTarget rounds every advised minimum up at the shown precision, in metres
+// and feet, and checks that the advice meets the target
+func TestMinimumAdviceMeetsTarget(t *testing.T) {
+	for _, unit := range []string{UnitMeters, UnitFeet} {
+		for _, target := range SpillTargets {
+			for _, gain := range []float64{-12, -6, -0.3, 0, 0.3, 6, 12} {
+				for _, own := range []float64{0.02, 0.1, 0.37, 1, 2.5} {
+					r := SpillCheck(own, own*2, gain, target.DB)
+					shown := CeilTo(FromMeters(r.MinNeighbour, unit), 2)
+					at := SpillCheck(own, ToMeters(shown, unit), gain, target.DB)
+					// The advice never undercuts the exact minimum beyond floating-point noise
+					if exact := FromMeters(r.MinNeighbour, unit); !r.Valid || !at.MeetsTarget || shown < exact*(1-1e-9) {
+						t.Errorf("%s, %s, gain %v, own %v: advice %v %s gives %.4f dB", unit, target.Name, gain, own, shown, unit, at.SpillDB)
+					}
+				}
+			}
+		}
 	}
 }

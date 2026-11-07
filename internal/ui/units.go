@@ -61,6 +61,12 @@ func (in *unitInput) setBase(v float64) {
 	in.converting = false
 }
 
+// Valid reports whether the entry holds a finite number (not empty, malformed, NaN or Inf)
+func (in *unitInput) Valid() bool {
+	_, ok := logic.ParseNumber(in.Entry.Text)
+	return ok
+}
+
 // Empty reports whether nothing has been entered
 func (in *unitInput) Empty() bool {
 	return strings.TrimSpace(in.Entry.Text) == ""

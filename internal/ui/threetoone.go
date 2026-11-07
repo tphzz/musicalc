@@ -156,13 +156,28 @@ func NewThreeToOneTab() *View {
 	update = func() {
 		unit := distUnit.Selected
 		name := strings.TrimSpace(source.Text)
-		gainDB := logic.ParseFloat(gain.Text)
+		gainDB, gainOK := logic.ParseNumber(gain.Text)
+		if strings.TrimSpace(gain.Text) == "" {
+			gainDB, gainOK = 0, true
+		}
+		// usable: empty (still missing) or a positive finite distance
+		usable := func(in *unitInput) bool {
+			v, ok := logic.ParseNumber(in.Entry.Text)
+			return in.Empty() || (ok && v > 0)
+		}
+		// Something was typed that cannot be used, as opposed to a value still missing
+		inputInvalid := !gainOK || !usable(own) || !usable(neighbour)
 		t := logic.SpillTargets[max(target.SelectedIndex(), 0)]
 		r := logic.SpillCheck(own.Base, neighbour.Base, gainDB, t.DB)
+		if inputInvalid {
+			r = logic.SpillResult{}
+		}
 		renderResult = func() {
 			defer relayout()
-			dist := func(meters float64) string {
-				return logic.FormatTrim(logic.FromMeters(meters, unit), 2) + " " + unit
+			// atLeast shows a minimum distance rounded up at the shown precision, so following
+			// the advice meets the target
+			atLeast := func(meters float64) string {
+				return logic.FormatTrim(logic.CeilTo(logic.FromMeters(meters, unit), 2), 2) + " " + unit
 			}
 			srcName, srcSentence := i18n.T("source.generic"), i18n.T("source.sentence")
 			if name != "" {
@@ -184,7 +199,12 @@ func NewThreeToOneTab() *View {
 
 			if !r.Valid {
 				widgets.SetStyledText(ratioValue, "–", theme.ColorNamePlaceHolder)
-				widgets.SetStyledText(caption, i18n.T("three.enter", srcName), "")
+				if inputInvalid || (!own.Empty() && !neighbour.Empty()) {
+					// Both distances are there, but a value cannot be used (or the result overflows)
+					widgets.SetStyledText(caption, i18n.T("three.invalid"), "")
+				} else {
+					widgets.SetStyledText(caption, i18n.T("three.enter", srcName), "")
+				}
 				for _, c := range []fyne.CanvasObject{geoCard, spillCard, fixCard, combCard} {
 					c.Hide()
 				}
@@ -260,7 +280,7 @@ func NewThreeToOneTab() *View {
 					}
 				}
 			}
-			closest := dist(r.MinNeighbour) // the distances went in as metres
+			closest := atLeast(r.MinNeighbour) // the distances went in as metres
 			if r.MeetsTarget {
 				if r.MarginDB < 0.05 {
 					widgets.SetStyledText(fixTitle, i18n.T("three.on_target_title"), "")
@@ -283,10 +303,17 @@ func NewThreeToOneTab() *View {
 				}
 			}
 
-			// Comb filtering, stated as the condition it depends on
-			comb := i18n.T("three.comb_cancel", dB(r.CombBoostDB))
-			if !r.CanCancel {
+			// Comb filtering, stated as the condition it depends on. Only equal levels can cancel
+			// completely; a spill twice as loud or more never dips below the own mic (at exactly
+			// twice, the minimum is 0 dB, so a cut that would show as −0.0 dB counts as none).
+			var comb string
+			switch {
+			case r.CanCancel:
+				comb = i18n.T("three.comb_cancel", dB(r.CombBoostDB))
+			case r.CombCutDB < -0.05:
 				comb = i18n.T("three.comb", dB(r.CombBoostDB), dB(r.CombCutDB))
+			default:
+				comb = i18n.T("three.comb_boost", dB(r.CombCutDB), dB(r.CombBoostDB))
 			}
 			widgets.SetStyledText(combText, comb, "")
 		}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"io"
 	"musicalc/internal/i18n"
@@ -20,6 +21,12 @@ import (
 )
 
 var version = "dev"
+
+// appIcon is the window and taskbar icon. It is embedded because desktop builds are plain
+// go builds without packaged metadata, and the app may start from any working directory.
+//
+//go:embed icons/appicon.png
+var appIcon []byte
 
 const (
 	windowWidth  = 450
@@ -42,7 +49,7 @@ type tabInfo struct {
 }
 
 // createCompactHeader creates a compact header with: hamburger + "category / tab heading", and on
-// the right the overflow button (⋮) for tabs with extra actions
+// the right the overflow button (⋮), always shown: the tab's own actions, if any, then Help
 func createCompactHeader(showMenu func(), headerLabel *widget.Label, actionsButton fyne.CanvasObject) *fyne.Container {
 	menuButton := widgets.NewButtonWithIcon("", theme.MenuIcon(), showMenu)
 	menuButton.Importance = widget.LowImportance
@@ -80,6 +87,7 @@ func main() {
 		fyne.LogError("Could not configure desktop scaling", err)
 	}
 	myApp := app.NewWithID("com.musicalc")
+	setAppIcon(myApp)
 	ui.InitializeLanguage(myApp.Preferences())
 	myApp.Settings().SetTheme(ui.NewCustomTheme())
 
@@ -102,14 +110,15 @@ func main() {
 	window.ShowAndRun()
 }
 
+// setAppIcon gives the app its embedded icon; windows without their own icon use it
+func setAppIcon(a fyne.App) {
+	a.SetIcon(fyne.NewStaticResource("appicon.png", appIcon))
+}
+
 func buildMainWindow(myApp fyne.App, scale *displayscale.Controller) fyne.Window {
 	window := myApp.NewWindow("MusiCalc")
 	window.Resize(fyne.NewSize(windowWidth, windowHeight))
 	window.SetFixedSize(true)
-
-	if icon, err := fyne.LoadResourceFromPath("icons/appicon.png"); err == nil {
-		window.SetIcon(icon)
-	}
 
 	tabs := []tabInfo{
 		{"tab.timecode", "title.timecode", ui.ResourceTimecodeSvg, ui.NewTimecodeTab, "timecode"},

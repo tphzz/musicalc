@@ -13,6 +13,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// maxTransposeInput bounds typed semitones and cents before integer conversion
+const maxTransposeInput = 1e6
+
 func NewTempoChangeTab() *View {
 	texts := newTextRefresh()
 	// Tempo bindings
@@ -45,6 +48,28 @@ func NewTempoChangeTab() *View {
 	// Flag to prevent circular updates
 	updating := false
 
+	signed := func(v int) string {
+		if v > 0 {
+			return fmt.Sprintf("+%d", v)
+		}
+		return fmt.Sprintf("%d", v)
+	}
+	// clear empties derived fields, so invalid input does not leave earlier results looking current
+	clear := func(fields ...interface{ SetText(string) }) {
+		for _, f := range fields {
+			f.SetText("")
+		}
+	}
+	showDelta := func(res logic.TempoChangeResult) {
+		sign := ""
+		if res.TempoVariation > 0 {
+			sign = "+"
+		}
+		tempoDeltaLabel.SetText(fmt.Sprintf("%s%.2f %%", sign, res.TempoVariation))
+		semitones50Label.SetText(signed(res.Semitones50Cent))
+		cents50Label.SetText(signed(res.Cents50Cent))
+	}
+
 	// Calculate from new tempo
 	calcFromNewTempo := func() {
 		if updating {
@@ -53,48 +78,15 @@ func NewTempoChangeTab() *View {
 		updating = true
 		defer func() { updating = false }()
 
-		origTempo := logic.ParseFloat(originalTempoEntry.Text)
-		newTempo := logic.ParseFloat(newTempoEntry.Text)
-
-		if origTempo > 0 && newTempo > 0 {
-			res := logic.CalculateFromNewTempo(origTempo, newTempo)
-			// Format time stretch: omit .00 suffix if whole number
-			if res.TimeStretchPercent == float64(int(res.TimeStretchPercent)) {
-				timeStretchEntry.SetText(fmt.Sprintf("%d", int(res.TimeStretchPercent)))
-			} else {
-				timeStretchEntry.SetText(fmt.Sprintf("%.2f", res.TimeStretchPercent))
-			}
-
-			sign := ""
-			if res.TempoVariation > 0 {
-				sign = "+"
-			}
-			tempoDeltaLabel.SetText(fmt.Sprintf("%s%.2f %%", sign, res.TempoVariation))
-
-			semiSign := ""
-			if res.Semitones > 0 {
-				semiSign = "+"
-			}
-			semitonesEntry.SetText(fmt.Sprintf("%s%d", semiSign, res.Semitones))
-
-			centsSign := ""
-			if res.Cents > 0 {
-				centsSign = "+"
-			}
-			centsEntry.SetText(fmt.Sprintf("%s%d", centsSign, res.Cents))
-
-			semi50Sign := ""
-			if res.Semitones50Cent > 0 {
-				semi50Sign = "+"
-			}
-			semitones50Label.SetText(fmt.Sprintf("%s%d", semi50Sign, res.Semitones50Cent))
-
-			cents50Sign := ""
-			if res.Cents50Cent > 0 {
-				cents50Sign = "+"
-			}
-			cents50Label.SetText(fmt.Sprintf("%s%d", cents50Sign, res.Cents50Cent))
+		res := logic.CalculateFromNewTempo(logic.ParseFloat(originalTempoEntry.Text), logic.ParseFloat(newTempoEntry.Text))
+		if !res.Valid {
+			clear(timeStretchEntry, tempoDeltaLabel, semitonesEntry, centsEntry, semitones50Label, cents50Label)
+			return
 		}
+		timeStretchEntry.SetText(logic.FormatTwoDecimals(res.TimeStretchPercent))
+		semitonesEntry.SetText(signed(res.Semitones))
+		centsEntry.SetText(signed(res.Cents))
+		showDelta(res)
 	}
 
 	// Calculate from time stretch %
@@ -105,48 +97,15 @@ func NewTempoChangeTab() *View {
 		updating = true
 		defer func() { updating = false }()
 
-		origTempo := logic.ParseFloat(originalTempoEntry.Text)
-		timeStretch := logic.ParseFloat(timeStretchEntry.Text)
-
-		if origTempo > 0 && timeStretch > 0 {
-			res := logic.CalculateFromTimeStretch(origTempo, timeStretch)
-			// Format new tempo: omit .00 suffix if whole number
-			if res.NewTempo == float64(int(res.NewTempo)) {
-				newTempoEntry.SetText(fmt.Sprintf("%d", int(res.NewTempo)))
-			} else {
-				newTempoEntry.SetText(fmt.Sprintf("%.2f", res.NewTempo))
-			}
-
-			sign := ""
-			if res.TempoVariation > 0 {
-				sign = "+"
-			}
-			tempoDeltaLabel.SetText(fmt.Sprintf("%s%.2f %%", sign, res.TempoVariation))
-
-			semiSign := ""
-			if res.Semitones > 0 {
-				semiSign = "+"
-			}
-			semitonesEntry.SetText(fmt.Sprintf("%s%d", semiSign, res.Semitones))
-
-			centsSign := ""
-			if res.Cents > 0 {
-				centsSign = "+"
-			}
-			centsEntry.SetText(fmt.Sprintf("%s%d", centsSign, res.Cents))
-
-			semi50Sign := ""
-			if res.Semitones50Cent > 0 {
-				semi50Sign = "+"
-			}
-			semitones50Label.SetText(fmt.Sprintf("%s%d", semi50Sign, res.Semitones50Cent))
-
-			cents50Sign := ""
-			if res.Cents50Cent > 0 {
-				cents50Sign = "+"
-			}
-			cents50Label.SetText(fmt.Sprintf("%s%d", cents50Sign, res.Cents50Cent))
+		res := logic.CalculateFromTimeStretch(logic.ParseFloat(originalTempoEntry.Text), logic.ParseFloat(timeStretchEntry.Text))
+		if !res.Valid {
+			clear(newTempoEntry, tempoDeltaLabel, semitonesEntry, centsEntry, semitones50Label, cents50Label)
+			return
 		}
+		newTempoEntry.SetText(logic.FormatTwoDecimals(res.NewTempo))
+		semitonesEntry.SetText(signed(res.Semitones))
+		centsEntry.SetText(signed(res.Cents))
+		showDelta(res)
 	}
 
 	// Calculate from transpose (semitones/cents inputs)
@@ -157,8 +116,6 @@ func NewTempoChangeTab() *View {
 		updating = true
 		defer func() { updating = false }()
 
-		origTempo := logic.ParseFloat(originalTempoEntry.Text)
-
 		// Allow incomplete input (e.g., just "-" or "+") without updating
 		semiText := semitonesEntry.Text
 		centsText := centsEntry.Text
@@ -167,100 +124,33 @@ func NewTempoChangeTab() *View {
 			return
 		}
 
-		semitones := int(logic.ParseFloat(semiText))
-		cents := int(logic.ParseFloat(centsText))
-
-		// Store original values to check if normalization changed them
-		origSemitones := semitones
-		origCents := cents
-
-		// Normalize cents to [-50, 50] range by wrapping to adjacent semitones
-		// E.g., 51 cents => +1 semitone, -49 cents
-		for cents > 50 {
-			cents -= 100
-			semitones++
+		origTempo := logic.ParseFloat(originalTempoEntry.Text)
+		semitonesValue := logic.ParseFloat(semiText)
+		centsValue := logic.ParseFloat(centsText)
+		// Far beyond any shift the tempo range allows, and safe to convert to int
+		if !(math.Abs(semitonesValue) <= maxTransposeInput && math.Abs(centsValue) <= maxTransposeInput) {
+			clear(newTempoEntry, timeStretchEntry, tempoDeltaLabel, semitones50Label, cents50Label)
+			return
 		}
-		for cents < -50 {
-			cents += 100
-			semitones--
-		}
+		origSemitones, origCents := int(semitonesValue), int(centsValue)
 
-		// Dynamic semitone bounds based on tempo limits (5.0 - 1000.0 BPM)
-		// Calculate max/min semitones (as floats for precise boundary checking)
-		if origTempo > 0 {
-			const minTempo = 5.0
-			const maxTempo = 999.99 // Slightly under 1000 to avoid rounding errors
-
-			// Calculate exact semitone boundaries
-			maxSemitonesFloat := 12.0 * math.Log2(maxTempo/origTempo)
-			minSemitonesFloat := 12.0 * math.Log2(minTempo/origTempo)
-
-			// Calculate total semitones including cents
-			totalSemitones := float64(semitones) + float64(cents)/100.0
-
-			// Clamp to tempo boundaries
-			if totalSemitones > maxSemitonesFloat {
-				// Clamp to max: use floor for semitones to match 50-cent notation
-				semitones = int(math.Floor(maxSemitonesFloat))
-				cents = int(math.Round((maxSemitonesFloat - float64(semitones)) * 100.0))
-			}
-			if totalSemitones < minSemitonesFloat {
-				// Clamp to min: use floor for semitones to match 50-cent notation
-				semitones = int(math.Floor(minSemitonesFloat))
-				cents = int(math.Round((minSemitonesFloat - float64(semitones)) * 100.0))
-			}
-		}
-
-		// Only update the UI if values changed after normalization
+		// Cents wrap into ±50 and the shift is limited to the supported tempo range
+		semitones, cents := logic.NormalizeTranspose(origTempo, origSemitones, origCents)
 		if semitones != origSemitones {
-			semiSign := ""
-			if semitones > 0 {
-				semiSign = "+"
-			}
-			semitonesEntry.SetText(fmt.Sprintf("%s%d", semiSign, semitones))
+			semitonesEntry.SetText(signed(semitones))
 		}
-
 		if cents != origCents {
-			centSign := ""
-			if cents > 0 {
-				centSign = "+"
-			}
-			centsEntry.SetText(fmt.Sprintf("%s%d", centSign, cents))
+			centsEntry.SetText(signed(cents))
 		}
 
-		if origTempo > 0 {
-			res := logic.CalculateFromTranspose(origTempo, semitones, cents)
-			// Format new tempo: omit .00 suffix if whole number
-			if res.NewTempo == float64(int(res.NewTempo)) {
-				newTempoEntry.SetText(fmt.Sprintf("%d", int(res.NewTempo)))
-			} else {
-				newTempoEntry.SetText(fmt.Sprintf("%.2f", res.NewTempo))
-			}
-			// Format time stretch: omit .00 suffix if whole number
-			if res.TimeStretchPercent == float64(int(res.TimeStretchPercent)) {
-				timeStretchEntry.SetText(fmt.Sprintf("%d", int(res.TimeStretchPercent)))
-			} else {
-				timeStretchEntry.SetText(fmt.Sprintf("%.2f", res.TimeStretchPercent))
-			}
-
-			sign := ""
-			if res.TempoVariation > 0 {
-				sign = "+"
-			}
-			tempoDeltaLabel.SetText(fmt.Sprintf("%s%.2f %%", sign, res.TempoVariation))
-
-			semi50Sign := ""
-			if res.Semitones50Cent > 0 {
-				semi50Sign = "+"
-			}
-			semitones50Label.SetText(fmt.Sprintf("%s%d", semi50Sign, res.Semitones50Cent))
-
-			cents50Sign := ""
-			if res.Cents50Cent > 0 {
-				cents50Sign = "+"
-			}
-			cents50Label.SetText(fmt.Sprintf("%s%d", cents50Sign, res.Cents50Cent))
+		res := logic.CalculateFromTranspose(origTempo, semitones, cents)
+		if !res.Valid {
+			clear(newTempoEntry, timeStretchEntry, tempoDeltaLabel, semitones50Label, cents50Label)
+			return
 		}
+		newTempoEntry.SetText(logic.FormatTwoDecimals(res.NewTempo))
+		timeStretchEntry.SetText(logic.FormatTwoDecimals(res.TimeStretchPercent))
+		showDelta(res)
 	}
 
 	// Reset function (defined after calculation functions so it can call them)

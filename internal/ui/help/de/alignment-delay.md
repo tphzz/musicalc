@@ -1,6 +1,6 @@
 # Laufzeitausgleich
 
-Wie viel Verzögerung benötigen die nahen Mikrofone, damit der Schall einer Quelle an allen Mikrofonen gleichzeitig ankommt?
+Wie viel Verzögerung benötigen die nahen Mikrofone, damit derselbe Schall in den Spuren aller Mikrofone übereinstimmt?
 
 ## Einsatz
 
@@ -14,7 +14,7 @@ Schall bewegt sich bei 20 °C mit ungefähr **343 m/s**, also mit rund **2.9 ms 
 
 ![Schallquelle, Nahmikrofone und Raummikrofon mit unterschiedlichen Ankunftszeiten](../images/alignment-setup.png)
 
-*Ankunft des Schlags vor und nach dem Laufzeitausgleich. Die Abbildung verwendet englische Beschriftungen.*
+*Wann der Schlag in jeder Spur erscheint: wie aufgenommen und nach dem Einstellen der Verzögerungen in der DAW. Der Schall erreicht die Mikrofone weiterhin zu verschiedenen Zeiten; ausgeglichen werden die aufgenommenen Signale. Die Abbildung verwendet englische Beschriftungen.*
 
 Für jedes Nahmikrofon berechnet der Rechner die Verzögerung, die seinen kürzeren Weg zum **Referenzmikrofon**, meist dem entferntesten Mikrofon, ausgleicht:
 
@@ -57,7 +57,9 @@ Der Aufbau beginnt geöffnet mit Snare, 20 °C, 3 m und 48 kHz. Nach dem ersten 
 5. **In Mono prüfen:** Nahmikrofon und Referenz solo abhören und den Ausgleich ein- und ausschalten. Ausgerichtet kann es straffer und voller klingen, muss aber nicht besser sein.
 6. **Nach Gehör oder Wellenform verfeinern:** Einen Schlag in beiden Spuren vergrößern und den tatsächlichen Versatz vergleichen. Die Rechnung ist ein Ausgangspunkt.
 
-Standardaufbauten lassen sich im **⋮**-Menü als **Presets** speichern, laden, verwalten und zwischen Geräten importieren/exportieren. Ein Preset enthält Quelle, Abstände, Einheiten, Samplerate und Mikrofone, aber keine Temperatur.
+Standardaufbauten lassen sich im **⋮**-Menü als **Presets** speichern, laden, verwalten und zwischen Geräten importieren/exportieren. Ein Preset enthält Quelle, Abstände, Einheiten, Samplerate und Mikrofone, aber keine Temperatur. Lassen sich gespeicherte Presets oder der letzte Aufbau nicht lesen, meldet die App das: Unbrauchbare Presets werden ausgelassen, ein unbrauchbarer Aufbau beginnt mit den Standardwerten.
+
+Die Temperatur muss zwischen −40 und +50 °C (−40 und 122 °F) liegen, Abstände müssen 0 oder mehr betragen. Sonst zeigt die Liste einen Hinweis mit dem Grund und keine Verzögerungen; ein neues Mikrofon mit negativem Abstand wird nicht hinzugefügt.
 
 ## Beispiele
 
@@ -75,6 +77,7 @@ Die Overheads unterscheiden sich um 0.58 ms; deshalb erscheint der Stereohinweis
 
 ## Hinweise
 
-- **Es ist ein Schätzwert.** Das Modell nimmt direkte Schallausbreitung an. Reflexionen, Quellengröße und eigene Mikrofonverzögerungen fehlen. Nach Gehör bestätigen.
+- **Es ist ein Schätzwert.** Das Modell nimmt direkte Schallausbreitung an, mit einer linearen Näherung der Schallgeschwindigkeit, die zwischen −40 und +50 °C auf deutlich unter 1 % genau ist; Luftfeuchte fehlt. Reflexionen, Quellengröße und eigene Mikrofonverzögerungen fehlen ebenfalls. Nach Gehör bestätigen.
+- **Live:** Die Verzögerungen gleichen die Mikrofone untereinander aus. Latenz von Pult, Plug-ins und PA ist ein eigenes Thema.
 - **Nicht jedes Mikrofon sollte ausgerichtet werden.** Die spätere Ankunft eines Raummikrofons kann zum räumlichen Eindruck gehören. Perfekter Ausgleich kann den Raum kleiner wirken lassen.
 - **Zwei-Mikrofon-Summe** zeigt die Folgen eines Zeitunterschieds. Die **3:1-Regel** prüft das Übersprechen zu einem anderen Mikrofon.

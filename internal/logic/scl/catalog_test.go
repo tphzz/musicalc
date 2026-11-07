@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -55,5 +56,31 @@ func TestTuningsStartWithDefault(t *testing.T) {
 	}
 	if want := tunings[0].Group + " · " + tunings[0].Short; tunings[0].Label != want {
 		t.Errorf("label is %q, want %q", tunings[0].Label, want)
+	}
+}
+
+// TestCatalogTonics checks the tonic each 1/1 is meant for: C unless the file name names another
+// one ("..._on_d.scl")
+func TestCatalogTonics(t *testing.T) {
+	tonics := map[string]int{"c": tonicC, "d": tonicD, "e": tonicE}
+	for _, g := range catalog {
+		for _, sc := range g.scales {
+			want := tonicC
+			if i := strings.LastIndex(sc.filename, "_on_"); i >= 0 {
+				letter := strings.TrimSuffix(sc.filename[i+len("_on_"):], ".scl")
+				var ok bool
+				if want, ok = tonics[letter]; !ok {
+					t.Fatalf("%s: tonic %q is not in the test table", sc.filename, letter)
+				}
+			}
+			if sc.tonic != want {
+				t.Errorf("%s: tonic %d, want %d", sc.filename, sc.tonic, want)
+			}
+		}
+	}
+	for _, tuning := range Tunings() {
+		if tuning.Tonic < 0 || tuning.Tonic > 11 {
+			t.Errorf("%s: tonic %d is not a pitch class", tuning.Label, tuning.Tonic)
+		}
 	}
 }

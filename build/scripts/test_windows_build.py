@@ -9,11 +9,14 @@ import unittest
 
 BUILDER = Path(__file__).with_name("build-win.ps1")
 POWERSHELL = shutil.which("powershell")
+# PowerShell 7 is optional on a workstation; the builder must also work there
+SHELLS = [shell for shell in (POWERSHELL, shutil.which("pwsh")) if shell]
 
 
 @unittest.skipUnless(os.name == "nt" and POWERSHELL, "requires Windows PowerShell")
 class WindowsBuildTests(unittest.TestCase):
-    def run_builder(self, arch, zig_version="0.16.0", build_status=0, check_status=0):
+    def run_builder(self, arch, zig_version="0.16.0", build_status=0, check_status=0,
+                    shell=POWERSHELL, caller_has_git=True):
         with tempfile.TemporaryDirectory(prefix="musicalc windows build ") as temporary:
             root = Path(temporary)
             builder = root / "build/scripts/build-win.ps1"
@@ -32,6 +35,10 @@ function python {
     }
 }
 function git {
+    # Real Git rejects an empty GIT_DIR ("not a git repository: ''")
+    if ([Environment]::GetEnvironmentVariable("GIT_DIR", "Process") -eq "") {
+        [Console]::Error.WriteLine("fatal: not a git repository: ''"); $global:LASTEXITCODE = 128; return
+    }
     $global:LASTEXITCODE = 0
     if ($args[-1] -eq "--absolute-git-dir") { Join-Path $env:MUSICALC_TEST_ROOT ".git" }
     else { $env:MUSICALC_TEST_ROOT }
@@ -49,7 +56,12 @@ $original = @{}
 foreach ($name in @("CGO_ENABLED", "CC", "CXX", "GOOS", "GOARCH", "GOAMD64", "CGO_CFLAGS",
                     "CGO_LDFLAGS", "ZIG_GLOBAL_CACHE_DIR", "ZIG_LOCAL_CACHE_DIR", "GIT_DIR", "GIT_WORK_TREE")) {
     $original[$name] = "caller-$name"
-    [Environment]::SetEnvironmentVariable($name, $original[$name], "Process")
+    if ($env:MUSICALC_TEST_CALLER_HAS_GIT -eq "0" -and $name -like "GIT_*") {
+        $original[$name] = $null
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    } else {
+        [Environment]::SetEnvironmentVariable($name, $original[$name], "Process")
+    }
 }
 $status = 0
 try { & $env:MUSICALC_TEST_BUILDER -Arch $env:MUSICALC_TEST_ARCH }
@@ -62,11 +74,12 @@ foreach ($name in $original.Keys) {
 exit $status
 """, encoding="utf-8")
             return subprocess.run(
-                [POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(harness)],
+                [shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(harness)],
                 env={**os.environ, "MUSICALC_TEST_BUILDER": str(builder), "MUSICALC_TEST_ARCH": arch,
                      "MUSICALC_TEST_ROOT": str(root),
                      "MUSICALC_TEST_ZIG_VERSION": zig_version, "MUSICALC_TEST_BUILD_STATUS": str(build_status),
-                     "MUSICALC_TEST_CHECK_STATUS": str(check_status)},
+                     "MUSICALC_TEST_CHECK_STATUS": str(check_status),
+                     "MUSICALC_TEST_CALLER_HAS_GIT": "1" if caller_has_git else "0"},
                 capture_output=True, text=True, timeout=30,
             )
 
@@ -98,6 +111,18 @@ exit $status
                     self.assertNotIn("mingw32-gcc", " ".join(data["arguments"]))
                     self.assertTrue(Path(data["ZIG_GLOBAL_CACHE_DIR"]).is_absolute())
                     self.assertTrue(Path(data["ZIG_LOCAL_CACHE_DIR"]).is_absolute())
+
+    def test_git_selection_is_cleared_and_restored_in_every_shell(self):
+        # A variable the caller did not set must be absent again afterwards, not left empty
+        for shell in SHELLS:
+            for caller_has_git in (True, False):
+                with self.subTest(shell=Path(shell).name, caller_has_git=caller_has_git):
+                    result = self.run_builder("amd64", shell=shell, caller_has_git=caller_has_git)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    data = json.loads(result.stdout.splitlines()[0])
+                    self.assertEqual(Path(data["GIT_DIR"]).name, ".git")
+        if not shutil.which("pwsh"):
+            self.skipTest("PowerShell 7 is not installed; only Windows PowerShell 5.1 was checked")
 
     def test_wrong_zig_version_stops_before_compilation(self):
         for version in ("0.15.2", "0.18.0", "0.17.0-dev.1"):

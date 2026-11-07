@@ -1,6 +1,6 @@
 # Alignment Delay
 
-How much delay does each close mic need, so that a sound arrives in all your mics at the same time?
+How much delay does each close mic need, so that one sound lines up in all your mics' tracks?
 
 ## When to use it
 
@@ -14,7 +14,7 @@ Sound travels at about **343 m/s** at 20 °C, so it needs about **2.9 ms per met
 
 ![Source, close mics and room mic, and when each mic hears the hit](images/alignment-setup.png)
 
-*When the hit arrives: before and after adding the delays.*
+*When the hit appears in each track: as recorded, and after the delays are set in the DAW. The sound still reaches the mics at different times; the delays line up the recorded signals.*
 
 For every close mic, the calculator works out the delay that makes up for its shorter path: the time the sound needs to travel the extra distance to the **reference mic**, usually the farthest mic:
 
@@ -37,6 +37,8 @@ The samples are the delay times the sample rate, rounded to whole samples.
 
 The Setup card starts open with Snare, 20 °C, 3 m and 48 kHz, and folds into one line once the first mic is added. Tap the trash icon on a card to remove a mic.
 
+The temperature must be within −40 to +50 °C (−40 to 122 °F) and distances must be 0 or more. Otherwise the list shows a note saying why and no delays; a new mic with a negative distance is not added.
+
 ## Reading the results
 
 ![Mic cards with a delay, the stereo pair note, the reference and a farther mic](images/alignment-cards.png)
@@ -55,7 +57,7 @@ The Setup card starts open with Snare, 20 °C, 3 m and 48 kHz, and folds into on
 5. **Check in mono:** solo the close mic with the reference, switch the delay on and off, and listen. Aligned can sound tighter and fuller, but not always; keep whichever sounds better.
 6. **Fine-tune by ear or by eye:** zoom in on a hit in both tracks and compare. The calculation is a starting point; the waveforms show the actual offset.
 
-Keep standard setups as **presets** in the **⋮** menu: Save as…, Load, Manage, and Import/Export to move them between computers and phones. A preset stores the source, distances, units, sample rate and mics, but not the temperature.
+Keep standard setups as **presets** in the **⋮** menu: Save as…, Load, Manage, and Import/Export to move them between computers and phones. A preset stores the source, distances, units, sample rate and mics, but not the temperature. If stored presets or the last setup cannot be read, the app says so: unusable presets are left out and an unusable setup starts from the defaults.
 
 ## Examples
 
@@ -73,6 +75,7 @@ The overheads differ by 0.58 ms, so the pair note appears.
 
 ## Good to know
 
-- **It's an estimate.** It assumes sound travels straight from the source to each mic. Reflections, the source's size and the mics' own delays aren't included, so confirm by ear.
+- **It's an estimate.** It assumes sound travels straight from the source to each mic, at a speed from a linear approximation that is accurate to well under 1 % between −40 and +50 °C; humidity isn't included. Reflections, the source's size and the mics' own delays aren't included either, so confirm by ear.
+- **Live sound:** the delays line up the mics with each other. Latency of the console, plug-ins and the PA is a separate matter.
 - **Not every mic should be aligned.** A room mic's later arrival gives the sense of space; lining it up perfectly can make the room sound smaller. Treat alignment as an option to try.
 - Use **Two-Mic Sum** to see what a time difference does to the sound, and **3:1 Rule** to check how strongly a source spills into another mic.

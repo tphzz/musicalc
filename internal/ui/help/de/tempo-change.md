@@ -45,5 +45,5 @@ Wird Audio ohne Time-Stretching schneller abgespielt, steigt die Tonhöhe; bei l
 
 ## Hinweise
 
-- Die Transposition ist so begrenzt, dass das neue Tempo im Bereich 5–1000 BPM bleibt.
+- Beide Tempi müssen im Bereich 5–999,99 BPM liegen; außerhalb bleiben die Ergebnisse leer. Die Transposition ist so begrenzt, dass das neue Tempo in diesem Bereich bleibt.
 - Der Rechner beschreibt die gekoppelte Änderung von Tempo und Tonhöhe. Modernes Time-Stretching erhält die Tonhöhe; dafür ist nur **Zeitdehnung %** relevant.

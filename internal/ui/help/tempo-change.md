@@ -45,5 +45,5 @@ When audio is played faster without time-stretching, it gets higher; slower, it 
 
 ## Good to know
 
-- Transposing is limited so that the new tempo stays within 5–1000 BPM.
+- Both tempos must be within 5–999.99 BPM; outside that range the results stay empty. Transposing is limited so that the new tempo stays within it.
 - The calculator describes re-pitching (tempo and pitch together). Modern time-stretching changes the tempo without changing the pitch; then only **Time stretching %** applies.

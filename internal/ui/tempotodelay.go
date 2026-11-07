@@ -129,6 +129,12 @@ func NewTempoTab() *View {
 		for gi, g := range groups {
 			for vi, v := range variants {
 				res := logic.GetTempoData(tempo, g.Mult*v.Factor)
+				if !res.Valid {
+					// No tempo yet, or one that is not usable: no values rather than a default tempo
+					rows[gi][vi].ms.SetText("–")
+					widgets.SetStyledText(rows[gi][vi].hz, "–", "")
+					continue
+				}
 				rows[gi][vi].ms.SetText(fmt.Sprintf("%.2f ms", res.DelayMS))
 				widgets.SetStyledText(rows[gi][vi].hz, fmt.Sprintf("%.2f Hz", res.ModHz), "")
 			}

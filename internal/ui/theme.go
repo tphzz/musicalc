@@ -12,8 +12,18 @@ type customTheme struct {
 	isMobile bool
 }
 
+// scrollTrackAlpha makes the track behind a widened scroll bar see-through. The bar widens over
+// the content while the pointer is on it, and Fyne's opaque track would hide what is underneath.
+const scrollTrackAlpha = 0x4d // 30 %
+
 func (m customTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	return theme.DefaultTheme().Color(name, variant)
+	c := theme.DefaultTheme().Color(name, variant)
+	if name == theme.ColorNameScrollBarBackground {
+		n := color.NRGBAModel.Convert(c).(color.NRGBA)
+		n.A = scrollTrackAlpha
+		return n
+	}
+	return c
 }
 
 func (m customTheme) Icon(name fyne.ThemeIconName) fyne.Resource {

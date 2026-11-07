@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"musicalc/internal/audio"
+	"musicalc/internal/i18n"
 	"musicalc/internal/logic"
 	"musicalc/internal/ui/widgets"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -34,6 +37,14 @@ func NewFrequencyToNoteTab() *View {
 	// Flag to prevent circular updates
 	updating := false
 
+	// conventionOffset is the octave offset of the selected middle C naming
+	conventionOffset := func() int {
+		if middleCRadio.Selected == "C3" {
+			return logic.OctaveOffsetC3
+		}
+		return logic.OctaveOffsetC4
+	}
+
 	// Calculate and update all fields
 	calculateFromFrequency := func() {
 		if updating {
@@ -42,33 +53,30 @@ func NewFrequencyToNoteTab() *View {
 		updating = true
 		defer func() { updating = false }()
 
-		freq := logic.ParseFloat(frequencyEntry.Text)
-		if freq > 0 {
-			// Determine octave offset based on Middle C setting
-			octaveOffset := 1 // C4 convention (default)
-			if middleCRadio.Selected == "C3" {
-				octaveOffset = 2 // C3 convention
+		result := logic.FrequencyToNote(logic.ParseFloat(frequencyEntry.Text), conventionOffset())
+		if !result.Valid {
+			// Invalid input must not leave an earlier note looking current
+			for _, l := range []*widget.Label{note100Label, cents100Label, note50Label, cents50Label} {
+				l.SetText("")
 			}
-
-			result := logic.FrequencyToNote(freq, octaveOffset)
-
-			note100Label.SetText(result.Note100)
-
-			// Format cents with sign
-			cents100Sign := ""
-			if result.Cents100 > 0 {
-				cents100Sign = "+"
-			}
-			cents100Label.SetText(fmt.Sprintf("%s%d", cents100Sign, result.Cents100))
-
-			note50Label.SetText(result.Note50)
-
-			cents50Sign := ""
-			if result.Cents50 > 0 {
-				cents50Sign = "+"
-			}
-			cents50Label.SetText(fmt.Sprintf("%s%d", cents50Sign, result.Cents50))
+			return
 		}
+		note100Label.SetText(result.Note100)
+
+		// Format cents with sign
+		cents100Sign := ""
+		if result.Cents100 > 0 {
+			cents100Sign = "+"
+		}
+		cents100Label.SetText(fmt.Sprintf("%s%d", cents100Sign, result.Cents100))
+
+		note50Label.SetText(result.Note50)
+
+		cents50Sign := ""
+		if result.Cents50 > 0 {
+			cents50Sign = "+"
+		}
+		cents50Label.SetText(fmt.Sprintf("%s%d", cents50Sign, result.Cents50))
 	}
 
 	// Wire up change handlers
@@ -82,10 +90,7 @@ func NewFrequencyToNoteTab() *View {
 
 	// Quick-select buttons
 	c3Button := widgets.NewButton("C3", func() {
-		octaveOffset := 1 // C4 convention (default)
-		if middleCRadio.Selected == "C3" {
-			octaveOffset = 2 // C3 convention
-		}
+		octaveOffset := conventionOffset()
 		freq := logic.GetFrequencyForNote("C", 3, octaveOffset)
 		if freq == float64(int(freq)) {
 			frequencyEntry.SetText(fmt.Sprintf("%d", int(freq)))
@@ -95,10 +100,7 @@ func NewFrequencyToNoteTab() *View {
 	})
 
 	a3Button := widgets.NewButton("A3", func() {
-		octaveOffset := 1 // C4 convention (default)
-		if middleCRadio.Selected == "C3" {
-			octaveOffset = 2 // C3 convention
-		}
+		octaveOffset := conventionOffset()
 		freq := logic.GetFrequencyForNote("A", 3, octaveOffset)
 		if freq == float64(int(freq)) {
 			frequencyEntry.SetText(fmt.Sprintf("%d", int(freq)))
@@ -108,10 +110,7 @@ func NewFrequencyToNoteTab() *View {
 	})
 
 	c4Button := widgets.NewButton("C4", func() {
-		octaveOffset := 1 // C4 convention (default)
-		if middleCRadio.Selected == "C3" {
-			octaveOffset = 2 // C3 convention
-		}
+		octaveOffset := conventionOffset()
 		freq := logic.GetFrequencyForNote("C", 4, octaveOffset)
 		if freq == float64(int(freq)) {
 			frequencyEntry.SetText(fmt.Sprintf("%d", int(freq)))
@@ -121,10 +120,7 @@ func NewFrequencyToNoteTab() *View {
 	})
 
 	a4Button := widgets.NewButton("A4", func() {
-		octaveOffset := 1 // C4 convention (default)
-		if middleCRadio.Selected == "C3" {
-			octaveOffset = 2 // C3 convention
-		}
+		octaveOffset := conventionOffset()
 		freq := logic.GetFrequencyForNote("A", 4, octaveOffset)
 		if freq == float64(int(freq)) {
 			frequencyEntry.SetText(fmt.Sprintf("%d", int(freq)))
@@ -137,7 +133,11 @@ func NewFrequencyToNoteTab() *View {
 	playButton := texts.buttonWithIcon("action.play", theme.MediaPlayIcon(), func() {
 		freq := logic.ParseFloat(frequencyEntry.Text)
 		if freq > 0 && freq < 20000 {
-			go audio.PlayFrequency(freq, 3*time.Second)
+			go func() {
+				if err := audio.PlayFrequency(freq, 3*time.Second); err != nil {
+					fyne.Do(func() { showErrorDialog(errors.New(i18n.T("tone.play_error", err))) })
+				}
+			}()
 		}
 	})
 

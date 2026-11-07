@@ -2,6 +2,7 @@ package logic
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -44,7 +45,20 @@ func ConvertDistance(value float64, from, to string) float64 {
 	return FromMeters(ToMeters(value, from), to)
 }
 
-// SpeedOfSound returns the speed of sound in air in m/s at the given temperature in °C
+// The ambient temperatures the calculators accept. Within them the linear speed-of-sound
+// approximation below is accurate to well under 1 %; humidity is not taken into account.
+const (
+	MinTemperatureC = -40.0
+	MaxTemperatureC = 50.0
+)
+
+// TemperatureInRange reports whether celsius is within the accepted ambient temperatures
+func TemperatureInRange(celsius float64) bool {
+	return celsius >= MinTemperatureC && celsius <= MaxTemperatureC
+}
+
+// SpeedOfSound returns the speed of sound in air in m/s at the given temperature in °C, a linear
+// approximation meant for TemperatureInRange
 func SpeedOfSound(celsius float64) float64 {
 	return 331.3 + 0.606*celsius
 }
@@ -60,4 +74,25 @@ func FormatTrim(v float64, decimals int) string {
 		return "0"
 	}
 	return s
+}
+
+// FormatTwoDecimals formats v with two decimals, dropping ".00" from whole values: 3599.9999999999995
+// → "3600", 82.354 → "82.35", 1.5 → "1.50"
+func FormatTwoDecimals(v float64) string {
+	s := strings.TrimSuffix(fmt.Sprintf("%.2f", v), ".00")
+	if s == "-0" {
+		return "0"
+	}
+	return s
+}
+
+// CeilTo rounds v up to the given number of decimals, for minimums shown to the user: 0.112468
+// → 0.12. A value that is already on a step, within floating-point noise, stays: 0.12 → 0.12.
+func CeilTo(v float64, decimals int) float64 {
+	scale := math.Pow(10, float64(decimals))
+	scaled := v * scale
+	if r := math.Round(scaled); math.Abs(scaled-r) <= 1e-9*math.Max(1, math.Abs(scaled)) {
+		return r / scale
+	}
+	return math.Ceil(scaled) / scale
 }

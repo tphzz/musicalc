@@ -1,13 +1,14 @@
 """Crops screenshots of the calculators for the help pages and adds numbered callouts.
 
-The screenshots are taken from the phone-width app at twice the size (FYNE_SCALE=2, 400 x 680
-window), with the examples of the help pages entered. Pass the folder that holds them:
+The screenshots are rendered by the capture program, 400 points wide at scale 2 (800 px), with the
+examples of the help pages entered. Pass the folder it wrote them to:
 
+    go run ./utils/helpimages/capture <capture folder>
     python utils/helpimages/annotate.py <capture folder>
 
-Expected captures: cap-alignment.png (Alignment Delay, snare example), cap-sum.png (Two-Mic Sum,
-kick 4 m), cap-sum-aligned.png (the same after Align), cap-31.png (3:1 Rule, Singer A 1 / 3 m,
-+6 dB, 10 dB target). Coordinates below are in the captures' pixels (800 px wide).
+Captures: cap-alignment.png (Alignment Delay, snare example), cap-sum.png (Two-Mic Sum, kick
+4 m), cap-sum-aligned.png (the same with Mic A delayed by 11.65 ms, as Align sets it), cap-31.png
+(3:1 Rule, Singer A 1 / 3 m, +6 dB, 10 dB target). Coordinates below are in the captures' pixels.
 """
 import os
 import sys
@@ -21,26 +22,27 @@ WIDTH = 640  # 2x the shown width
 
 # image: (capture, crop box, callouts [(x, y, label)])
 IMAGES = {
-    "alignment-cards.png": ("cap-alignment.png", (0, 333, 800, 1122), [
-        (420, 388, "a delay to add, in ms and samples"),
-        (770, 745, "a stereo pair with different delays"),
-        (420, 902, "the mic at the reference distance"),
-        (420, 1035, "farther than the reference: move it earlier"),
+    "alignment-cards.png": ("cap-alignment.png", (0, 260, 800, 1050), [
+        (540, 306, "a delay to add, in ms and samples"),
+        (770, 700, "a stereo pair with different delays"),
+        (540, 848, "the mic at the reference distance"),
+        (400, 980, "farther than the reference: move it earlier"),
     ]),
-    "sum-graph.png": ("cap-sum.png", (0, 733, 800, 1211), [
-        (333, 836, "+6 dB: both mics add up fully"),
-        (182, 1100, "a dip: the mics cancel each other"),
-        (290, 1050, "shaded: the range of interest"),
-        (231, 882, "the cursor: the level at 60 Hz"),
+    "sum-graph.png": ("cap-sum.png", (0, 650, 800, 1135), [
+        (299, 757, "+6 dB: both mics add up fully"),
+        (163, 1023, "a dip: the mics cancel each other"),
+        (281, 946, "shaded: the range of interest"),
+        (231, 799, "the cursor: the level at 60 Hz"),
     ]),
-    "sum-aligned.png": ("cap-sum-aligned.png", (0, 589, 800, 1244), [
-        (520, 878, "after Align: +6 dB at every frequency"),
-        (444, 1105, "dashed: the response before"),
+    "sum-aligned.png": ("cap-sum-aligned.png", (0, 505, 800, 1212), [
+        (457, 833, "after Align: +6 dB across the graph"),
+        (380, 1045, "dashed: the response before"),
+        (720, 679, "the 2.45 µs the 0.01 ms steps leave"),
     ]),
-    "three-to-one-results.png": ("cap-31.png", (0, 455, 800, 1233), [
-        (560, 496, "the distance check: geometry only"),
-        (440, 667, "the spill against the target"),
-        (440, 940, "what to change to reach it"),
+    "three-to-one-results.png": ("cap-31.png", (0, 378, 800, 1135), [
+        (420, 417, "the distance check: geometry only"),
+        (440, 588, "the spill against the target"),
+        (440, 881, "what to change to reach it"),
     ]),
 }
 

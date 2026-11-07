@@ -114,3 +114,40 @@ func TestAlignmentDelayUnitSwitchKeepsDelays(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatTwoDecimals(t *testing.T) {
+	for _, tc := range []struct {
+		v    float64
+		want string
+	}{
+		{3600, "3600"}, {3599.9999999999995, "3600"}, {82.354, "82.35"}, {1.5, "1.50"}, {-16.67, "-16.67"}, {-0.001, "0"}, {0, "0"},
+	} {
+		if got := FormatTwoDecimals(tc.v); got != tc.want {
+			t.Errorf("FormatTwoDecimals(%v) = %q, want %q", tc.v, got, tc.want)
+		}
+	}
+}
+
+func TestCeilTo(t *testing.T) {
+	for _, tc := range []struct {
+		v    float64
+		want float64
+	}{
+		{0.112468265, 0.12},
+		{0.12, 0.12},
+		{0.1 + 0.02, 0.12}, // 0.12000000000000001
+		{3.0000000000000004, 3},
+		{2.9999999999999996, 3},
+		{0.120001, 0.13},
+		{0.369, 0.37},
+		{0, 0},
+		{-0.112, -0.11},
+	} {
+		if got := CeilTo(tc.v, 2); !near(got, tc.want, 1e-12) {
+			t.Errorf("CeilTo(%v, 2) = %v, want %v", tc.v, got, tc.want)
+		}
+	}
+	if got := CeilTo(math.Inf(1), 2); !math.IsInf(got, 1) {
+		t.Errorf("CeilTo(+Inf) = %v; callers must reject non-finite minimums before showing them", got)
+	}
+}

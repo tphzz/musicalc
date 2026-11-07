@@ -50,6 +50,38 @@ type SessionState struct {
 	LoadedPreset    string  `json:"loadedPreset"`
 }
 
+// ValidateSession checks a restored session like a preset from a file, except that it has no
+// name, and also requires an accepted temperature. Missing optional values are filled in.
+func ValidateSession(s *SessionState) error {
+	if !TemperatureInRange(s.TemperatureC) {
+		return ErrTemperatureRange
+	}
+	p := s.Preset
+	p.Name = "session" // a session is unnamed; the name rule does not apply
+	if err := validatePreset(&p); err != nil {
+		return err
+	}
+	p.Name = s.Preset.Name
+	s.Preset = p
+	return nil
+}
+
+// ValidatePresets checks stored presets and returns the usable ones plus the first problem found
+func ValidatePresets(presets []Preset) ([]Preset, error) {
+	var valid []Preset
+	var first error
+	for _, p := range presets {
+		if err := validatePreset(&p); err != nil {
+			if first == nil {
+				first = err
+			}
+			continue
+		}
+		valid = append(valid, p)
+	}
+	return valid, first
+}
+
 // MarshalPresets writes presets as an export file
 func MarshalPresets(presets []Preset) ([]byte, error) {
 	if presets == nil {

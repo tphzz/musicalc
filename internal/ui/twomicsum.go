@@ -29,10 +29,15 @@ type twoMicSession struct {
 	SampleRate   string
 	Farther      string
 	FartherUnit  string
-	Level        string
-	Inverted     bool
-	DelayA       string
-	Open         bool
+	// The physical "Farther by" value: Basis "distance" with Meters or "time" with Seconds. Absent
+	// in sessions from older versions, which are read from Farther and FartherUnit instead.
+	Basis    string   `json:",omitempty"`
+	Meters   *float64 `json:",omitempty"`
+	Seconds  *float64 `json:",omitempty"`
+	Level    string
+	Inverted bool
+	DelayA   string
+	Open     bool
 }
 
 // sourceRange is a typical range of interest and a frequency for the cursor
@@ -123,36 +128,57 @@ func NewTwoMicSumTab() *View {
 	texts.placeholder(farther, "field.distance")
 	fartherUnit := widget.NewSelect([]string{logic.UnitMeters, unitMS}, nil)
 	fartherUnit.Selected = logic.UnitMeters
+	// The "Farther by" value keeps what was entered, a distance or a measured time, at full
+	// precision. Switching its unit only changes how it is shown; editing it chooses the basis.
+	var basis farBasis
+	var basisMeters, basisSeconds float64
 	converting := false
-	farther.OnChanged = func(string) {
-		if !converting {
-			refresh()
-		}
-	}
-	// convertFarther rewrites the "Farther by" value from one unit to another; a distance and a time
-	// convert through the speed of sound
-	convertFarther := func(from, to string) {
-		if from == to || strings.TrimSpace(farther.Text) == "" {
+	farther.OnChanged = func(text string) {
+		if converting {
 			return
 		}
-		v := logic.ParseFloat(farther.Text)
-		var out float64
+		v, ok := logic.ParseNumber(text)
 		switch {
-		case from != unitMS && to != unitMS:
-			out = logic.ConvertDistance(v, from, to)
-		case to == unitMS:
-			out = logic.ArrivalDelay(logic.ToMeters(v, from), temp.Base) * 1000
+		case strings.TrimSpace(text) == "":
+			basis = farEmpty
+		case !ok:
+			basis = farInvalid
+		case fartherUnit.Selected == unitMS:
+			basis, basisSeconds = farTime, v/1000
 		default:
-			out = logic.FromMeters(v/1000*logic.SpeedOfSound(temp.Base), to)
+			basis, basisMeters = farDistance, logic.ToMeters(v, fartherUnit.Selected)
+		}
+		refresh()
+	}
+	// showFarther writes the stored value in the selected unit; a distance and a time convert through
+	// the speed of sound, which needs a valid temperature
+	showFarther := func() {
+		var v float64
+		ok := true
+		unit := fartherUnit.Selected
+		switch {
+		case basis == farDistance && unit != unitMS:
+			v = logic.FromMeters(basisMeters, unit)
+		case basis == farDistance:
+			v, ok = logic.ArrivalDelay(basisMeters, temp.Base)
+			v *= 1000
+		case basis == farTime && unit == unitMS:
+			v = basisSeconds * 1000
+		case basis == farTime:
+			v, ok = logic.DistanceForDelay(basisSeconds, temp.Base)
+			v = logic.FromMeters(v, unit)
+		default:
+			return // empty or invalid text stays as typed
+		}
+		if !ok {
+			return
 		}
 		converting = true
-		farther.SetText(logic.FormatTrim(out, 2))
+		farther.SetText(logic.FormatTrim(v, 2))
 		converting = false
 	}
-	lastFartherUnit := fartherUnit.Selected
-	fartherUnit.OnChanged = func(unit string) {
-		convertFarther(lastFartherUnit, unit)
-		lastFartherUnit = unit
+	fartherUnit.OnChanged = func(string) {
+		showFarther()
 		refresh()
 	}
 	// The distance unit for the whole tab; "Farther by" offers it and ms
@@ -161,7 +187,7 @@ func NewTwoMicSumTab() *View {
 	distUnit.OnChanged = func(unit string) {
 		fartherUnit.Options = []string{unit, unitMS}
 		if fartherUnit.Selected != unitMS {
-			fartherUnit.SetSelected(unit) // converts the value
+			fartherUnit.SetSelected(unit) // shows the value in the new unit
 		}
 		fartherUnit.Refresh()
 		refresh()
@@ -288,29 +314,78 @@ func NewTwoMicSumTab() *View {
 
 	var renderResult func()
 	update = func() {
-		lo, hi := logic.ParseFloat(loEntry.Text), logic.ParseFloat(hiEntry.Text)
-		cursor := logic.ParseFloat(freqEntry.Text)
+		lo, loOK := logic.ParseNumber(loEntry.Text)
+		hi, hiOK := logic.ParseNumber(hiEntry.Text)
+		cursor, cursorOK := logic.ParseNumber(freqEntry.Text)
+		cursorEmpty := strings.TrimSpace(freqEntry.Text) == ""
 		rate := logic.ParseSampleRate(sampleRate.Selected)
-		hasArrival := strings.TrimSpace(farther.Text) != ""
+		hasArrival := basis != farEmpty
+		bandOK := loOK && hiOK && logic.BandInRange(lo, hi)
+		// A distance, or showing the time as one, needs the speed of sound
+		needsTemp := basis == farDistance || fartherUnit.Selected != unitMS
+		tempOK := temp.Valid() && logic.TemperatureInRange(temp.Base) // "abc" or "-" is not 0 °C
+		// A value shown in the other kind of unit follows the temperature; typed text stays as typed
+		if (basis == farDistance) == (fartherUnit.Selected == unitMS) && (basis == farDistance || basis == farTime) {
+			showFarther()
+		}
 		var fv, arrival, delay, net, levelDB, gLo, gHi, cursorDB, lowDB, highDB float64
 		var m logic.TwoMicSum
 		var dipFreqs, peakFreqs []float64
-		if hasArrival {
-			fv = logic.ParseFloat(farther.Text)
-			arrival = fv / 1000
-			if fartherUnit.Selected != unitMS {
-				arrival = logic.ArrivalDelay(logic.ToMeters(fv, fartherUnit.Selected), temp.Base)
-			}
-			delay = logic.ParseFloat(delayA.Text) / 1000
-			net = arrival - delay
-			// Delays are shown to 0.01 ms: within half of that, Mic A and B count as lined up
-			if math.Abs(net) < 0.000005 {
-				net = 0
-			}
-			// Response
-			levelDB = logic.ParseFloat(level.Text)
-			m = logic.TwoMicSum{Delay: net, Gain: logic.DBToGain(levelDB), Inverted: polarity.SelectedIndex() == 1}
+		invalid := "" // the message key of the first unusable input
+		if bandOK {
 			gLo, gHi = logic.GraphRange(lo, hi)
+		}
+		levelDB, levelOK := logic.ParseNumber(level.Text)
+		if strings.TrimSpace(level.Text) == "" {
+			levelDB, levelOK = 0, true
+		}
+		delayMS, delayOK := logic.ParseNumber(delayA.Text)
+		if strings.TrimSpace(delayA.Text) == "" {
+			delayMS, delayOK = 0, true
+		}
+		delay = delayMS / 1000
+		switch {
+		case !hasArrival:
+		case basis == farInvalid:
+			invalid = "sum.invalid_farther"
+		case needsTemp && !tempOK:
+			invalid = "sum.invalid_temperature"
+		case !bandOK:
+			invalid = "sum.invalid_band"
+		case !cursorEmpty && !(cursorOK && cursor >= gLo && cursor <= gHi):
+			invalid = "sum.invalid_cursor"
+		case !levelOK:
+			invalid = "sum.invalid_level"
+		case !delayOK || delay < 0:
+			invalid = "sum.invalid_delay"
+		}
+		if cursorEmpty {
+			cursor = 0
+		}
+		if hasArrival && invalid == "" {
+			if basis == farTime {
+				arrival = basisSeconds
+				fv, _ = logic.DistanceForDelay(arrival, temp.Base)
+			} else {
+				arrival, _ = logic.ArrivalDelay(basisMeters, temp.Base)
+				fv = basisMeters
+			}
+			fv = logic.FromMeters(fv, distUnit.Selected)
+			// Times must stay countable in samples, or they would show as Inf or endless digits
+			switch {
+			case !logic.SampleCountInRange(arrival, rate):
+				invalid = "sum.invalid_farther"
+			case !logic.SampleCountInRange(delay, rate):
+				invalid = "sum.invalid_delay"
+			}
+			// The residual stays exact: rounding it would hide a comb that is there
+			net = arrival - delay
+			m = logic.TwoMicSum{Delay: net, Gain: logic.DBToGain(levelDB), Inverted: polarity.SelectedIndex() == 1}
+			if invalid == "" && !m.Valid() {
+				invalid = "sum.invalid_level" // the level is too extreme to convert
+			}
+		}
+		if hasArrival && invalid == "" {
 			curve := func(model logic.TwoMicSum, before bool) widgets.GraphCurve {
 				fs := logic.SampleFrequencies(gLo, gHi, 600, model)
 				ls := make([]float64, len(fs))
@@ -326,12 +401,11 @@ func NewTwoMicSumTab() *View {
 				curves = append(curves, curve(logic.TwoMicSum{Delay: arrival, Gain: 1}, true))
 			}
 			curves = append(curves, curve(m, false))
-			graph.SetData(gLo, gHi, curves, lo, hi, cursor, m.LevelDB(cursor))
-
-			cursorDB = m.LevelDB(cursor)
-			if lo > 0 && hi > lo {
-				lowDB, highDB = m.RangeDB(lo, hi)
+			if cursor > 0 {
+				cursorDB = m.LevelDB(cursor)
 			}
+			graph.SetData(gLo, gHi, curves, lo, hi, cursor, cursorDB)
+			lowDB, highDB = m.RangeDB(lo, hi)
 			if !m.Aligned() {
 				dipFreqs = m.DipsFrom(gLo, 3)
 				peakFreqs = m.PeaksFrom(gLo, 3)
@@ -348,7 +422,7 @@ func NewTwoMicSumTab() *View {
 			}
 			setup.SetTitle(title)
 			rangeText := "–"
-			if lo > 0 && hi > lo {
+			if bandOK {
 				rangeText = logic.FormatTrim(lo, 2) + "–" + logic.FormatTrim(hi, 2) + " Hz"
 			}
 			tempText := "–"
@@ -358,9 +432,17 @@ func NewTwoMicSumTab() *View {
 			setup.SetSummary(rangeText + " · " + tempText + " · " + logic.FormatTrim(float64(rate)/1000, 1) + " kHz")
 
 			// Arrival difference
-			if !hasArrival {
+			if !hasArrival || invalid != "" {
+				message := i18n.T("sum.enter_distance")
+				switch invalid {
+				case "":
+				case "sum.invalid_cursor":
+					message = i18n.T(invalid, logic.FormatTrim(gLo, 1), logic.FormatTrim(gHi, 1))
+				default:
+					message = i18n.T(invalid)
+				}
 				widgets.SetStyledText(arrivalTitle, "–", "")
-				widgets.SetStyledText(arrivalText, i18n.T("sum.enter_distance"), "")
+				widgets.SetStyledText(arrivalText, message, "")
 				alignButton.Hide()
 				for _, c := range []fyne.CanvasObject{graphCard, combCard, suggestCard} {
 					c.Hide()
@@ -377,11 +459,17 @@ func NewTwoMicSumTab() *View {
 				}
 				return i18n.T("sum.later")
 			}
-			aligned := delay != 0 && net == 0
+			// Delays are entered to 0.01 ms: within half of that Mic B counts as lined up, but the
+			// response keeps the residual
+			aligned := delay != 0 && math.Abs(net) < 0.000005
 			switch {
 			case aligned:
 				widgets.SetStyledText(arrivalTitle, i18n.T("sum.aligned"), theme.ColorNameSuccess)
-				widgets.SetStyledText(arrivalText, i18n.T("sum.aligned_detail", ms(arrival), ms(delay)), "")
+				detail := i18n.T("sum.aligned_detail", ms(arrival), ms(delay))
+				if net != 0 {
+					detail += i18n.T("sum.aligned_residual", fmt.Sprintf("%.2f", math.Abs(net)*1e6), laterOrEarlier(net))
+				}
+				widgets.SetStyledText(arrivalText, detail, "")
 			case delay != 0:
 				widgets.SetStyledText(arrivalTitle, i18n.T("sum.net", ms(net), laterOrEarlier(net)), theme.ColorNameForeground)
 				widgets.SetStyledText(arrivalText, i18n.T("sum.delayed_detail", ms(arrival), laterOrEarlier(arrival), ms(delay)), "")
@@ -391,8 +479,8 @@ func NewTwoMicSumTab() *View {
 			default:
 				widgets.SetStyledText(arrivalTitle, i18n.T("sum.arrival", ms(arrival), laterOrEarlier(arrival)), theme.ColorNameForeground)
 				detail := i18n.T("sum.sample_detail", samples(arrival), logic.FormatTrim(float64(rate)/1000, 1))
-				if fartherUnit.Selected != unitMS {
-					detail += i18n.T("sum.distance_detail", logic.FormatTrim(math.Abs(fv), 2), fartherUnit.Selected, map[bool]string{true: i18n.T("sum.farther_word"), false: i18n.T("sum.closer_word")}[fv >= 0], tempText)
+				if basis == farDistance {
+					detail += i18n.T("sum.distance_detail", logic.FormatTrim(math.Abs(fv), 2), distUnit.Selected, map[bool]string{true: i18n.T("sum.farther_word"), false: i18n.T("sum.closer_word")}[fv >= 0], tempText)
 				}
 				widgets.SetStyledText(arrivalText, detail, "")
 			}
@@ -405,29 +493,37 @@ func NewTwoMicSumTab() *View {
 			} else {
 				alignButton.SetText(i18n.T("action.align"))
 				alignButton.OnTapped = func() { delayA.SetText(fmt.Sprintf("%.2f", arrival*1000)) }
-				if arrival > 0 {
+				// A delay that rounds to 0.00 ms would change nothing
+				if arrival > 0 && fmt.Sprintf("%.2f", arrival*1000) != "0.00" {
 					alignButton.Enable()
 				} else {
 					alignButton.Disable() // Mic B is first: the delay belongs on Mic B
 				}
 			}
 
+			// The model's floor stands for complete cancellation; down to −60 dB is "nearly"
 			reading := ""
 			if cursor > 0 {
-				if cursorDB <= -60 {
+				switch {
+				case cursorDB <= logic.MinLevelDB:
 					reading = i18n.T("sum.cursor_cancel", logic.FormatTrim(cursor, 2))
-				} else {
+				case cursorDB <= -60:
+					reading = i18n.T("sum.cursor_near", logic.FormatTrim(cursor, 2))
+				default:
 					reading = i18n.T("sum.cursor", logic.FormatTrim(cursor, 2), signedDB(cursorDB))
 				}
 			}
-			if lo > 0 && hi > lo {
+			{
 				band := rangeText + ": "
 				switch {
+				case highDB <= logic.MinLevelDB:
+					band += i18n.T("sum.band_cancel_all")
 				case highDB-lowDB < 0.05:
 					band += i18n.T("sum.band_constant", signedDB(highDB))
-				case lowDB <= -60:
-					// The model's floor stands for complete cancellation, not a level to read
+				case lowDB <= logic.MinLevelDB:
 					band += i18n.T("sum.band_cancel", signedDB(highDB))
+				case lowDB <= -60:
+					band += i18n.T("sum.band_near", signedDB(highDB))
 				default:
 					band += i18n.T("sum.band_range", signedDB(lowDB), signedDB(highDB))
 				}
@@ -443,10 +539,11 @@ func NewTwoMicSumTab() *View {
 			case modelAligned && !m.Inverted:
 				setLines(combLines, i18n.T("sum.aligned_comb", signedDB(peakDB)))
 			case modelAligned:
-				if dipDB <= -60 {
+				if dipDB <= logic.MinLevelDB {
 					setLines(combLines, i18n.T("sum.cancel_comb"))
 				} else {
-					setLines(combLines, i18n.T("sum.reduced_comb", -dipDB))
+					// A louder inverted Mic B gives a boost, so the level is signed
+					setLines(combLines, i18n.T("sum.reduced_comb", signedDB(dipDB)))
 				}
 			default:
 				dips, peaks := i18n.T("sum.dips"), i18n.T("sum.peaks")
@@ -463,6 +560,11 @@ func NewTwoMicSumTab() *View {
 					spacing = i18n.T("sum.spacing", logic.FormatTrim(math.Round(combSpacing*10)/10, 1))
 				}
 				lines := []string{dips + freqList(audible(dipFreqs)) + spacing, peaks + freqList(audible(peakFreqs)) + spacing}
+				if len(audible(dipFreqs)) == 0 && len(audible(peakFreqs)) == 0 {
+					// A residual of microseconds puts the comb above hearing: say what is left of it
+					low, high := m.RangeDB(20, 20000)
+					lines = []string{i18n.T("sum.no_audible_comb", signedDB(low), signedDB(high))}
+				}
 				var notes []string
 				if levelDB < -0.05 {
 					notes = append(notes, i18n.T("sum.shallow", -levelDB))
@@ -504,6 +606,12 @@ func NewTwoMicSumTab() *View {
 		s := twoMicSession{Lo: loEntry.Text, Hi: hiEntry.Text, Freq: freqEntry.Text, TempC: temp.Base, TempUnit: tempUnit.Selected,
 			DistUnit: distUnit.Selected, SampleRate: sampleRate.Selected, Farther: farther.Text, FartherUnit: fartherUnit.Selected,
 			Level: level.Text, Inverted: polarity.SelectedIndex() == 1, DelayA: delayA.Text, Open: setup.IsOpen()}
+		switch basis {
+		case farDistance:
+			s.Basis, s.Meters = string(farDistance), &basisMeters
+		case farTime:
+			s.Basis, s.Seconds = string(farTime), &basisSeconds
+		}
 		if data, err := json.Marshal(s); err == nil {
 			fyne.CurrentApp().Preferences().SetString(prefTwoMicSession, string(data))
 		}
@@ -524,8 +632,7 @@ func NewTwoMicSumTab() *View {
 		distUnit.SetSelected(s.DistUnit)
 	}
 	if s.FartherUnit != "" {
-		fartherUnit.Selected = s.FartherUnit // the value is stored in this unit: no conversion
-		lastFartherUnit = s.FartherUnit
+		fartherUnit.Selected = s.FartherUnit // the typed value is in this unit: no conversion
 		fartherUnit.Refresh()
 	}
 	if s.SampleRate != "" {
@@ -535,7 +642,11 @@ func NewTwoMicSumTab() *View {
 	hiEntry.SetText(s.Hi)
 	freqEntry.SetText(s.Freq)
 	matchPreset()
-	farther.SetText(s.Farther)
+	farther.SetText(s.Farther) // sets the basis from the text, as typed
+	restoreFartherBasis(s, &basis, &basisMeters, &basisSeconds)
+	if s.Basis != "" && (basis == farDistance || basis == farTime) {
+		showFarther() // the stored full-precision value wins: the entry must not contradict it
+	}
 	level.SetText(s.Level)
 	if s.Inverted {
 		polarity.SetSelected(i18n.T("polarity.inverted"))
@@ -568,4 +679,30 @@ func NewTwoMicSumTab() *View {
 	})
 
 	return texts.view(content)
+}
+
+// farBasis is what the "Farther by" value was entered as
+type farBasis string
+
+const (
+	farEmpty    farBasis = ""
+	farInvalid  farBasis = "invalid"
+	farDistance farBasis = "distance"
+	farTime     farBasis = "time"
+)
+
+// restoreFartherBasis replaces the basis read from the saved text by the saved full-precision
+// value. A session without that value (from an older version) keeps the basis from the text. A
+// partial or unusable value leaves the entry invalid rather than guessing.
+func restoreFartherBasis(s twoMicSession, basis *farBasis, meters, seconds *float64) {
+	finite := func(v *float64) bool { return v != nil && !math.IsNaN(*v) && !math.IsInf(*v, 0) }
+	switch {
+	case s.Basis == "" && s.Meters == nil && s.Seconds == nil:
+	case s.Basis == string(farDistance) && finite(s.Meters) && s.Seconds == nil:
+		*basis, *meters = farDistance, *s.Meters
+	case s.Basis == string(farTime) && finite(s.Seconds) && s.Meters == nil:
+		*basis, *seconds = farTime, *s.Seconds
+	default:
+		*basis = farInvalid
+	}
 }
